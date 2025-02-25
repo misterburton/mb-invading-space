@@ -4,6 +4,7 @@ class SoundSystem {
         this.audioCtx = null;
         this.initialized = false;
         this.masterGain = null;
+        this.muted = true; // Add mute flag for testing
         
         // Track active sounds
         this.activeSounds = {};
@@ -19,6 +20,27 @@ class SoundSystem {
             mysteryShip: { frequency: 300, type: 'square', duration: 0.1, decay: 0.01, repeat: true },
             hit: { frequency: 100, type: 'sawtooth', duration: 0.3, decay: 0.2 },
         };
+        
+        // Add event listeners for user interaction
+        this.addUserInteractionListeners();
+    }
+    
+    addUserInteractionListeners() {
+        // List of events that count as user interaction
+        const interactionEvents = ['click', 'touchstart', 'keydown'];
+        
+        const initOnInteraction = () => {
+            this.init();
+            // Remove all event listeners after first interaction
+            interactionEvents.forEach(event => {
+                document.removeEventListener(event, initOnInteraction);
+            });
+        };
+        
+        // Add listeners for all interaction events
+        interactionEvents.forEach(event => {
+            document.addEventListener(event, initOnInteraction, { once: false });
+        });
     }
     
     init() {
@@ -39,6 +61,8 @@ class SoundSystem {
     }
     
     playSound(name) {
+        if (this.muted) return; // Skip playing sounds if muted
+        
         if (!this.initialized) {
             this.init();
             if (!this.initialized) return; // Still not initialized
@@ -189,7 +213,7 @@ class SoundSystem {
 // Create global sound system instance
 const SOUND_SYSTEM = new SoundSystem();
 
-// Initialize on user interaction
-document.addEventListener('click', () => {
-    SOUND_SYSTEM.init();
-}, { once: true }); 
+// Remove this listener since we now handle it in the class
+// document.addEventListener('click', () => {
+//     SOUND_SYSTEM.init();
+// }, { once: true }); 
