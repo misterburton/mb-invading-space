@@ -151,12 +151,6 @@ class Game {
         if (this.gameOver) {
             this.drawGameOver();
         }
-        
-        // Draw credits
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '16px "Press Start 2P", monospace';
-        this.ctx.textAlign = 'right';
-        this.ctx.fillText(`CREDIT 00`, this.canvas.width - 10, this.canvas.height - 10);
     }
     
     drawScore() {
@@ -210,7 +204,9 @@ class Game {
             this.ctx.drawImage(ASSETS.getImage('protagonist'), x, livesY, 30, 16);
         }
         
-        // Draw credits text
+        // Draw CREDIT 00 at the bottom right
+        this.ctx.fillStyle = '#fff';
+        this.ctx.font = '16px "Press Start 2P", monospace';
         this.ctx.textAlign = 'right';
         this.ctx.fillText(`CREDIT 00`, this.canvas.width - 10, livesY + 12);
     }
