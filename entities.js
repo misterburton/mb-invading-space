@@ -26,36 +26,59 @@ class Entity {
 
 class Alien extends Entity {
     constructor(x, y, type, rowIndex, colIndex) {
-        super(x, y, 30, 30);
+        // Use the actual size of our pixel aliens (scaled up)
+        const width = 16;
+        const height = 8;
+        
+        super(x, y, width*2, height*2);
         this.type = type;
         this.rowIndex = rowIndex;
         this.colIndex = colIndex;
         this.alive = true;
         this.canShoot = true;
+        this.frame = 0; // Current animation frame
     }
-
+    
     update(dt) {
         // Movement will be handled by the AlienGrid
     }
-
+    
     draw(ctx) {
         if (!this.alive) return;
         
-        let imageName = 'alien1';
-        if (this.type === 2) imageName = 'alien2';
-        if (this.type === 3) imageName = 'alien3';
+        // Get the right image based on type and current frame
+        let imageName = `alien${this.type}`;
         
-        ctx.drawImage(ASSETS.getImage(imageName), this.x, this.y, this.width, this.height);
+        // Scale up and draw the alien at the correct position
+        ctx.save();
+        ctx.imageSmoothingEnabled = false; // Keep the pixelated look
+        ctx.drawImage(
+            ASSETS.getImage(imageName), 
+            this.x, this.y, 
+            this.width, this.height
+        );
+        
+        // Debug: Draw hitbox rectangle around the alien
+        if (window.DEBUG_HITBOXES) {
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(this.x, this.y, this.width, this.height);
+        }
+        
+        ctx.restore();
     }
-
+    
     shoot() {
         if (!this.canShoot || !this.alive) return null;
         
         this.canShoot = false;
+        
+        // Reset shooting ability after a delay (1.5 seconds)
         setTimeout(() => {
             this.canShoot = true;
-        }, 1000); // Cooldown period
+        }, 1500);
         
+        // Create a bullet from the bottom center of the alien
         return new AlienBullet(this.x + this.width / 2, this.y + this.height);
     }
 }
@@ -70,16 +93,23 @@ class AlienGrid {
         this.moveTimer = 0;
         this.moveInterval = 1; // seconds between movements
         this.gameWidth = gameWidth;
+        this.moveCount = 0;
         
         this.initialize(gameWidth, gameHeight);
     }
     
     initialize(gameWidth, gameHeight) {
-        const alienWidth = 30;
-        const alienHeight = 30;
-        const padding = 10;
-        const startX = (gameWidth - ((alienWidth + padding) * this.cols - padding)) / 2;
-        const startY = 50;
+        const alienWidth = 24;
+        const alienHeight = 16;
+        const horizontalPadding = 15;
+        const verticalPadding = 16;
+        
+        // Move aliens down further from the score area
+        const startY = 80; // Start below the score display
+        
+        // Calculate starting X to center the grid
+        const gridWidth = (alienWidth + horizontalPadding) * this.cols - horizontalPadding;
+        const startX = (gameWidth - gridWidth) / 2;
         
         for (let row = 0; row < this.rows; row++) {
             for (let col = 0; col < this.cols; col++) {
@@ -87,8 +117,8 @@ class AlienGrid {
                 if (row === 0) type = 3;
                 else if (row === 1 || row === 2) type = 2;
                 
-                const x = startX + col * (alienWidth + padding);
-                const y = startY + row * (alienHeight + padding);
+                const x = startX + col * (alienWidth + horizontalPadding);
+                const y = startY + row * (alienHeight + verticalPadding);
                 
                 this.aliens.push(new Alien(x, y, type, row, col));
             }
@@ -100,6 +130,10 @@ class AlienGrid {
         
         if (this.moveTimer >= this.moveInterval) {
             this.moveTimer = 0;
+            
+            // Play alien movement sound using the new sound system
+            SOUND_SYSTEM.playAlienMove(this.moveCount);
+            this.moveCount++;
             
             // Check if any alien hit the edge
             let hitEdge = false;
@@ -150,24 +184,142 @@ class AlienGrid {
 
 class Protagonist extends Entity {
     constructor(gameWidth, gameHeight) {
-        super(gameWidth / 2 - 25, gameHeight - 50, 50, 30);
+        const width = 30;
+        const height = 16;
+        
+        // We'll set the y position in the update method
+        // since we don't know the ground line position yet
+        const x = gameWidth / 2 - width / 2;
+        const y = gameHeight - 80; // Approximate for now
+        
+        super(x, y, width, height);
+        
         this.gameWidth = gameWidth;
+        this.lives = 3;
         this.speed = 150; // pixels per second
-        this.direction = 0; // -1 for left, 0 for stationary, 1 for right
-        this.health = 5;
+        this.direction = Math.random() > 0.5 ? 1 : -1; // Random initial direction
         this.shootTimer = 0;
-        this.shootInterval = 1; // seconds between shots
+        this.shootInterval = 1.5; // seconds between shots
         this.bullets = [];
+        this.movementChangeTimer = 0;
+        this.movementChangeInterval = 2; // Time before changing direction
+        this.evasionMode = false;
+        this.evasionDirection = 0;
+        this.evasionTimer = 0;
+        this.targetX = null; // Target for movement
     }
     
+    // Add a method to adjust the y position based on the ground line
+    updatePositionFromGround(groundLineY) {
+        if (groundLineY) {
+            // Position protagonist to sit on top of the ground line
+            this.y = groundLineY - this.height - 2; // Slight offset to sit above line
+        }
+    }
+    
+    // Add to protagonist.update method
     update(dt) {
-        // Move the protagonist
-        this.x += this.speed * this.direction * dt;
+        // Update position from ground line if available
+        if (window.game && window.game.groundLineY) {
+            this.updatePositionFromGround(window.game.groundLineY);
+        }
         
-        // Keep within game bounds
-        if (this.x < 0) this.x = 0;
-        if (this.x + this.width > this.gameWidth) this.x = this.gameWidth - this.width;
+        this.updateMovement(dt);
+        this.updateShooting(dt);
+        this.updateBullets(dt);
+    }
+    
+    updateMovement(dt) {
+        // Update movement change timer
+        this.movementChangeTimer += dt;
         
+        // Check for incoming bullets and try to evade
+        if (!this.evasionMode) {
+            this.checkForIncomingBullets();
+        } else {
+            // Update evasion timer
+            this.evasionTimer += dt;
+            if (this.evasionTimer > 0.5) {
+                this.evasionMode = false;
+                this.evasionTimer = 0;
+            }
+            
+            // Move in evasion direction
+            this.x += this.evasionDirection * this.speed * dt;
+        }
+        
+        // If not in evasion mode, move in current direction or toward target
+        if (!this.evasionMode) {
+            if (this.targetX !== null) {
+                // Move toward target
+                const dx = this.targetX - (this.x + this.width / 2);
+                if (Math.abs(dx) < 5) {
+                    // Target reached
+                    this.targetX = null;
+                    this.direction = Math.random() > 0.5 ? 1 : -1;
+                } else {
+                    this.direction = dx > 0 ? 1 : -1;
+                }
+            }
+            
+            // Randomly change direction periodically
+            if (this.movementChangeTimer >= this.movementChangeInterval) {
+                this.movementChangeTimer = 0;
+                
+                // 10% chance to pick a new target position
+                if (Math.random() < 0.1) {
+                    this.targetX = Math.random() * (this.gameWidth - this.width);
+                } else {
+                    // Otherwise just change direction
+                    this.direction = Math.random() > 0.5 ? 1 : -1;
+                }
+            }
+            
+            // Move in current direction
+            this.x += this.direction * this.speed * dt;
+        }
+        
+        // Boundary checking
+        if (this.x < 0) {
+            this.x = 0;
+            this.direction = 1;
+            this.targetX = null;
+        } else if (this.x + this.width > this.gameWidth) {
+            this.x = this.gameWidth - this.width;
+            this.direction = -1;
+            this.targetX = null;
+        }
+    }
+    
+    checkForIncomingBullets() {
+        // Get reference to active bullets (need to add this to the game class)
+        const bullets = window.game ? window.game.bullets : [];
+        
+        for (const bullet of bullets) {
+            if (bullet instanceof AlienBullet) {
+                // Check if bullet is heading toward the protagonist
+                if (bullet.y > this.y - 80 && bullet.y < this.y) {
+                    // Check horizontal alignment
+                    if (bullet.x > this.x - 20 && bullet.x < this.x + this.width + 20) {
+                        // Bullet is incoming! Try to evade
+                        this.evasionMode = true;
+                        this.evasionTimer = 0;
+                        
+                        // Determine best evasion direction
+                        if (bullet.x < this.x + this.width / 2) {
+                            this.evasionDirection = 1; // Bullet coming from left, move right
+                        } else {
+                            this.evasionDirection = -1; // Bullet coming from right, move left
+                        }
+                        
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    updateShooting(dt) {
         // Update shooting timer
         this.shootTimer += dt;
         
@@ -175,8 +327,9 @@ class Protagonist extends Entity {
         if (this.shootTimer >= this.shootInterval) {
             this.shoot();
         }
-        
-        // Update bullets
+    }
+    
+    updateBullets(dt) {
         for (let i = 0; i < this.bullets.length; i++) {
             this.bullets[i].update(dt);
             
@@ -191,10 +344,6 @@ class Protagonist extends Entity {
     draw(ctx) {
         // Draw protagonist with appropriate damage level
         let imageName = 'protagonist';
-        if (this.health === 4) imageName = 'protagonistDamaged1';
-        else if (this.health === 3) imageName = 'protagonistDamaged2';
-        else if (this.health === 2) imageName = 'protagonistDamaged3';
-        else if (this.health === 1) imageName = 'protagonistDamaged4';
         
         ctx.drawImage(ASSETS.getImage(imageName), this.x, this.y, this.width, this.height);
         
@@ -206,12 +355,13 @@ class Protagonist extends Entity {
     
     shoot() {
         this.shootTimer = 0;
+        ASSETS.playSound('shoot');
         this.bullets.push(new ProtagonistBullet(this.x + this.width / 2, this.y));
     }
     
     takeDamage() {
-        this.health--;
-        return this.health <= 0;
+        this.lives--;
+        return this.lives <= 0;
     }
     
     adjustSpeed(alienCount) {
@@ -224,7 +374,14 @@ class Protagonist extends Entity {
         const percentDestroyed = (totalAliens - alienCount) / totalAliens;
         
         this.speed = baseSpeed + percentDestroyed * maxSpeedIncrease;
-        this.direction = Math.random() > 0.5 ? 1 : -1; // Randomize direction
+        
+        // Also adjust shooting interval - shoot faster when fewer aliens
+        this.shootInterval = Math.max(0.5, 1.5 - percentDestroyed);
+        
+        // Randomize direction occasionally
+        if (Math.random() < 0.3) {
+            this.direction = Math.random() > 0.5 ? 1 : -1;
+        }
     }
 }
 
@@ -269,6 +426,7 @@ class Explosion {
         this.frameTime = 0;
         this.frameInterval = 0.1; // seconds per frame
         this.active = true;
+        this.isPixelated = true; // Use pixelated style
     }
     
     update(dt) {
@@ -287,12 +445,157 @@ class Explosion {
     draw(ctx) {
         if (!this.active) return;
         
-        // Simple explosion animation
-        const radius = this.size / 2 * (1 - this.frame / this.maxFrames);
+        if (this.isPixelated) {
+            // Pixelated explosion animation
+            const size = this.size * (1 - this.frame / this.maxFrames * 0.5);
+            const halfSize = size / 2;
+            
+            ctx.fillStyle = `rgb(255, ${255 - this.frame * 30}, 0)`;
+            
+            // Draw a pixelated explosion
+            const pixelSize = Math.max(2, Math.floor(size / 8));
+            
+            for (let y = -halfSize; y < halfSize; y += pixelSize) {
+                for (let x = -halfSize; x < halfSize; x += pixelSize) {
+                    // Create some randomness in the pattern
+                    if (Math.random() > 0.3 && x*x + y*y < halfSize * halfSize) {
+                        ctx.fillRect(
+                            this.x + x, 
+                            this.y + y, 
+                            pixelSize, 
+                            pixelSize
+                        );
+                    }
+                }
+            }
+        } else {
+            // Simple radial explosion animation (fallback)
+            const radius = this.size / 2 * (1 - this.frame / this.maxFrames);
+            
+            ctx.fillStyle = `rgb(255, ${255 - this.frame * 30}, 0)`;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+}
+
+class Barrier extends Entity {
+    constructor(x, y, width, height) {
+        super(x, y, width, height);
+        this.segments = [];
+        this.segmentSize = 3; // Use smaller segments for a more pixelated look
+        this.initializeSegments();
+    }
+    
+    initializeSegments() {
+        const segmentRows = Math.floor(this.height / this.segmentSize);
+        const segmentCols = Math.floor(this.width / this.segmentSize);
         
-        ctx.fillStyle = `rgb(255, ${255 - this.frame * 30}, 0)`;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
-        ctx.fill();
+        // Create the classic barrier shape
+        for (let row = 0; row < segmentRows; row++) {
+            for (let col = 0; col < segmentCols; col++) {
+                // Create the inverted U shape of the barrier
+                if (row >= segmentRows - 6 && col >= segmentCols/2 - 3 && col <= segmentCols/2 + 2) {
+                    continue; // Skip the middle bottom area to create the "door"
+                }
+                
+                this.segments.push({
+                    x: this.x + col * this.segmentSize,
+                    y: this.y + row * this.segmentSize,
+                    width: this.segmentSize,
+                    height: this.segmentSize,
+                    health: 3 // Each segment can take 3 hits
+                });
+            }
+        }
+    }
+    
+    checkBulletCollision(bullet) {
+        for (let i = 0; i < this.segments.length; i++) {
+            const segment = this.segments[i];
+            
+            if (bullet.x < segment.x + segment.width &&
+                bullet.x + bullet.width > segment.x &&
+                bullet.y < segment.y + segment.height &&
+                bullet.y + bullet.height > segment.y) {
+                
+                // Segment is hit, reduce health
+                segment.health--;
+                
+                // Remove segment if destroyed
+                if (segment.health <= 0) {
+                    this.segments.splice(i, 1);
+                }
+                
+                return true;
+            }
+        }
+        
+        return false;
+    }
+    
+    draw(ctx) {
+        ctx.fillStyle = '#00ff00'; // Classic Space Invaders green
+        
+        for (const segment of this.segments) {
+            let alpha = 1;
+            
+            // Fade segments based on health
+            if (segment.health < 3) {
+                alpha = segment.health / 3;
+            }
+            
+            ctx.globalAlpha = alpha;
+            ctx.fillRect(segment.x, segment.y, segment.width, segment.height);
+        }
+        
+        ctx.globalAlpha = 1;
+    }
+}
+
+// Add a new MysteryShip class
+class MysteryShip extends Entity {
+    constructor(gameWidth) {
+        const width = 48;
+        const height = 21;
+        const y = 70; // Just above the top row of aliens
+        
+        // Start outside the screen, moving right to left
+        const x = gameWidth;
+        
+        super(x, y, width, height);
+        
+        this.speed = -100; // Negative for right to left movement
+        this.active = true;
+        this.points = 100; // Points for hitting the mystery ship
+    }
+    
+    update(dt) {
+        this.x += this.speed * dt;
+        
+        // Deactivate when it goes off-screen
+        if (this.x < -this.width) {
+            this.active = false;
+        }
+    }
+    
+    draw(ctx) {
+        if (!this.active) return;
+        
+        // Draw a red UFO-like shape
+        ctx.fillStyle = '#ff0000';
+        ctx.fillRect(this.x, this.y, this.width, this.height);
+        
+        // Add details to make it look like the mystery ship
+        ctx.fillStyle = '#fff';
+        
+        // Window details
+        for (let i = 0; i < 4; i++) {
+            ctx.fillRect(this.x + 8 + i * 10, this.y + 12, 6, 3);
+        }
+        
+        // Top dome
+        ctx.fillRect(this.x + 16, this.y + 3, 16, 9);
     }
 } 

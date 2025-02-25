@@ -37,16 +37,7 @@ body {
 }
 
 #protagonist-health {
-    display: flex;
-    justify-content: flex-start;
-    margin-bottom: 10px;
-}
-
-.health-point {
-    width: 20px;
-    height: 10px;
-    background-color: green;
-    margin-right: 5px;
+    display: none;
 }
 
 #game-message {

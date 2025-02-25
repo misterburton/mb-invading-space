@@ -11,11 +11,15 @@ class Controls {
     setupEventListeners() {
         const canvas = document.getElementById('game-canvas');
         
+        // Touch events for mobile
         canvas.addEventListener('touchstart', this.handleTouchStart.bind(this));
         canvas.addEventListener('touchmove', this.handleTouchMove.bind(this));
         canvas.addEventListener('touchend', this.handleTouchEnd.bind(this));
         
-        // Add keyboard controls for testing on desktop
+        // Mouse events for desktop
+        canvas.addEventListener('mousedown', this.handleMouseDown.bind(this));
+        
+        // Keyboard controls for testing
         window.addEventListener('keydown', this.handleKeyDown.bind(this));
         window.addEventListener('keyup', this.handleKeyUp.bind(this));
     }
@@ -25,8 +29,16 @@ class Controls {
         
         const touch = e.touches[0];
         const rect = e.target.getBoundingClientRect();
-        const x = touch.clientX - rect.left;
-        const y = touch.clientY - rect.top;
+        
+        // Calculate the scale factor between canvas coordinates and CSS coordinates
+        const scaleX = this.game.canvas.width / rect.width;
+        const scaleY = this.game.canvas.height / rect.height;
+        
+        // Convert touch position to canvas coordinates
+        const x = (touch.clientX - rect.left) * scaleX;
+        const y = (touch.clientY - rect.top) * scaleY;
+        
+        console.log("Touch at:", x, y); // Debugging
         
         this.touchStartX = x;
         this.touchStartY = y;
@@ -41,6 +53,23 @@ class Controls {
     
     handleTouchEnd(e) {
         e.preventDefault();
+    }
+    
+    handleMouseDown(e) {
+        const rect = e.target.getBoundingClientRect();
+        
+        // Calculate the scale factor between canvas coordinates and CSS coordinates
+        const scaleX = this.game.canvas.width / rect.width;
+        const scaleY = this.game.canvas.height / rect.height;
+        
+        // Convert mouse position to canvas coordinates
+        const x = (e.clientX - rect.left) * scaleX;
+        const y = (e.clientY - rect.top) * scaleY;
+        
+        console.log("Mouse click at:", x, y);
+        
+        // Check if the player clicked on an alien
+        this.game.checkAlienTap(x, y);
     }
     
     handleKeyDown(e) {
