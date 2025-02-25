@@ -198,26 +198,29 @@ class Protagonist extends Entity {
         this.lives = 3;
         this.speed = 150; // pixels per second
         this.direction = Math.random() > 0.5 ? 1 : -1; // Random initial direction
+
+        // Timers
         this.shootTimer = 0;
         this.shootInterval = 1.5; // seconds between shots
-        this.bullets = [];
         this.movementChangeTimer = 0;
-        this.movementChangeInterval = 2; // Time before changing direction
+        this.movementChangeInterval = 2;
+
+        // Evasion
         this.evasionMode = false;
         this.evasionDirection = 0;
         this.evasionTimer = 0;
-        this.targetX = null; // Target for movement
+
+        // Movement target for random repositioning
+        this.targetX = null;
     }
     
-    // Add a method to adjust the y position based on the ground line
     updatePositionFromGround(groundLineY) {
         if (groundLineY) {
             // Position protagonist to sit on top of the ground line
-            this.y = groundLineY - this.height - 2; // Slight offset to sit above line
+            this.y = groundLineY - this.height - 2;
         }
     }
     
-    // Add to protagonist.update method
     update(dt) {
         // Update position from ground line if available
         if (window.game && window.game.groundLineY) {
@@ -226,24 +229,20 @@ class Protagonist extends Entity {
         
         this.updateMovement(dt);
         this.updateShooting(dt);
-        this.updateBullets(dt);
     }
     
     updateMovement(dt) {
-        // Update movement change timer
         this.movementChangeTimer += dt;
         
-        // Check for incoming bullets and try to evade
+        // Check for incoming bullets and possibly evade
         if (!this.evasionMode) {
             this.checkForIncomingBullets();
         } else {
-            // Update evasion timer
             this.evasionTimer += dt;
             if (this.evasionTimer > 0.5) {
                 this.evasionMode = false;
                 this.evasionTimer = 0;
             }
-            
             // Move in evasion direction
             this.x += this.evasionDirection * this.speed * dt;
         }
@@ -262,15 +261,14 @@ class Protagonist extends Entity {
                 }
             }
             
-            // Randomly change direction periodically
+            // Randomly change direction or target position
             if (this.movementChangeTimer >= this.movementChangeInterval) {
                 this.movementChangeTimer = 0;
-                
-                // 10% chance to pick a new target position
+                // 10% chance to pick a new target
                 if (Math.random() < 0.1) {
                     this.targetX = Math.random() * (this.gameWidth - this.width);
                 } else {
-                    // Otherwise just change direction
+                    // Otherwise just reverse direction
                     this.direction = Math.random() > 0.5 ? 1 : -1;
                 }
             }
@@ -279,7 +277,7 @@ class Protagonist extends Entity {
             this.x += this.direction * this.speed * dt;
         }
         
-        // Boundary checking
+        // Screen boundary checks
         if (this.x < 0) {
             this.x = 0;
             this.direction = 1;
@@ -292,26 +290,25 @@ class Protagonist extends Entity {
     }
     
     checkForIncomingBullets() {
-        // Get reference to active bullets (need to add this to the game class)
+        // Access the global bullet array from the game
         const bullets = window.game ? window.game.bullets : [];
         
         for (const bullet of bullets) {
             if (bullet instanceof AlienBullet) {
-                // Check if bullet is heading toward the protagonist
+                // Is bullet heading toward protagonist?
                 if (bullet.y > this.y - 80 && bullet.y < this.y) {
                     // Check horizontal alignment
                     if (bullet.x > this.x - 20 && bullet.x < this.x + this.width + 20) {
-                        // Bullet is incoming! Try to evade
+                        // Initiate evasion
                         this.evasionMode = true;
                         this.evasionTimer = 0;
                         
-                        // Determine best evasion direction
+                        // Decide evasion direction
                         if (bullet.x < this.x + this.width / 2) {
-                            this.evasionDirection = 1; // Bullet coming from left, move right
+                            this.evasionDirection = 1;  // move right
                         } else {
-                            this.evasionDirection = -1; // Bullet coming from right, move left
+                            this.evasionDirection = -1; // move left
                         }
-                        
                         break;
                     }
                 }
@@ -320,43 +317,24 @@ class Protagonist extends Entity {
     }
     
     updateShooting(dt) {
-        // Update shooting timer
         this.shootTimer += dt;
-        
-        // Auto-shoot when ready
         if (this.shootTimer >= this.shootInterval) {
             this.shoot();
-        }
-    }
-    
-    updateBullets(dt) {
-        for (let i = 0; i < this.bullets.length; i++) {
-            this.bullets[i].update(dt);
-            
-            // Remove bullets that go off-screen
-            if (this.bullets[i].y < -10) {
-                this.bullets.splice(i, 1);
-                i--;
-            }
-        }
-    }
-    
-    draw(ctx) {
-        // Draw protagonist with appropriate damage level
-        let imageName = 'protagonist';
-        
-        ctx.drawImage(ASSETS.getImage(imageName), this.x, this.y, this.width, this.height);
-        
-        // Draw bullets
-        for (const bullet of this.bullets) {
-            bullet.draw(ctx);
         }
     }
     
     shoot() {
         this.shootTimer = 0;
         ASSETS.playSound('shoot');
-        this.bullets.push(new ProtagonistBullet(this.x + this.width / 2, this.y));
+        // IMPORTANT: push bullet into the global game bullets array
+        window.game.bullets.push(
+            new ProtagonistBullet(this.x + this.width / 2, this.y)
+        );
+    }
+    
+    draw(ctx) {
+        // Draw protagonist sprite
+        ctx.drawImage(ASSETS.getImage('protagonist'), this.x, this.y, this.width, this.height);
     }
     
     takeDamage() {
@@ -367,18 +345,18 @@ class Protagonist extends Entity {
     adjustSpeed(alienCount) {
         // Increase protagonist speed as more aliens are destroyed
         const baseSpeed = 150;
-        const maxSpeedIncrease = 150; // Maximum additional speed
+        const maxSpeedIncrease = 150;
         
-        // Assuming we start with 55 aliens (5 rows * 11 columns)
+        // Start with 55 total aliens (5 x 11)
         const totalAliens = 5 * 11;
         const percentDestroyed = (totalAliens - alienCount) / totalAliens;
         
         this.speed = baseSpeed + percentDestroyed * maxSpeedIncrease;
         
-        // Also adjust shooting interval - shoot faster when fewer aliens
+        // Shoot faster as aliens are destroyed
         this.shootInterval = Math.max(0.5, 1.5 - percentDestroyed);
         
-        // Randomize direction occasionally
+        // Occasionally randomize direction
         if (Math.random() < 0.3) {
             this.direction = Math.random() > 0.5 ? 1 : -1;
         }

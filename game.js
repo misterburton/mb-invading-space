@@ -93,13 +93,13 @@ class Game {
         // Update alien grid
         this.alienGrid.update(dt);
         
-        // Update bullets
+        // UPDATE ALL BULLETS & COLLISIONS
         this.updateBullets(dt);
         
         // Update explosions
         this.updateExplosions(dt);
         
-        // Update mystery ship
+        // Mystery ship
         this.updateMysteryShip(dt);
     }
     
@@ -383,12 +383,11 @@ class Game {
         this.ctx.fillText('Tap to play again', this.canvas.width / 2, this.canvas.height / 2 + 40);
     }
     
-    // Separate method for bullet updates and collision detection
     updateBullets(dt) {
         for (let i = 0; i < this.bullets.length; i++) {
             this.bullets[i].update(dt);
             
-            // Check if bullet is off-screen
+            // Remove off-screen bullets
             if (this.bullets[i].y < 0 || this.bullets[i].y > this.canvas.height) {
                 this.bullets.splice(i, 1);
                 i--;
@@ -406,9 +405,9 @@ class Game {
                 }
             }
             
-            if (hitBarrier || i < 0 || i >= this.bullets.length) continue;
+            if (hitBarrier) continue;
             
-            // Check other collisions based on bullet type
+            // Now rely on bullet type to check collisions
             if (this.bullets[i] instanceof AlienBullet) {
                 this.checkAlienBulletCollisions(i);
             } else if (this.bullets[i] instanceof ProtagonistBullet) {
