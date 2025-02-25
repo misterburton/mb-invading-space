@@ -177,24 +177,24 @@ class AssetManager {
             // Mystery ship (UFO)
             canvas.width = 16;
             canvas.height = 7;
-            ctx.fillStyle = '#ff0000';
+            ctx.fillStyle = '#FF00FF'; // Magenta color like in the original
             
-            // Create the pixel pattern for the UFO
+            // Create the pixel pattern for the UFO based on the screenshot
             const ufoPixels = [
-                [0,0,0,0,1,1,1,1,0,0,0,0],
-                [0,0,1,1,1,1,1,1,1,1,0,0],
-                [0,1,1,1,1,1,1,1,1,1,1,0],
-                [1,1,0,1,0,1,1,0,1,0,1,1],
-                [1,1,1,1,1,1,1,1,1,1,1,1],
-                [0,0,1,0,1,0,0,1,0,1,0,0],
-                [0,0,0,1,0,0,0,0,1,0,0,0]
+                [0,0,0,0,1,1,1,1,1,1,0,0,0,0],
+                [0,0,1,1,1,1,1,1,1,1,1,1,0,0],
+                [0,1,1,1,1,1,1,1,1,1,1,1,1,0],
+                [1,1,0,1,0,1,1,1,1,0,1,0,1,1],
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+                [0,0,1,0,1,0,0,0,0,1,0,1,0,0],
+                [0,0,0,1,0,0,0,0,0,0,1,0,0,0]
             ];
             
             // Draw the pixel pattern
             for (let y = 0; y < ufoPixels.length; y++) {
                 for (let x = 0; x < ufoPixels[y].length; x++) {
                     if (ufoPixels[y][x] === 1) {
-                        ctx.fillRect(x+2, y, 1, 1);
+                        ctx.fillRect(x+1, y, 1, 1);
                     }
                 }
             }

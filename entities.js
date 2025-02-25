@@ -532,7 +532,7 @@ class Barrier extends Entity {
     }
 }
 
-// Add a new MysteryShip class
+// Update the MysteryShip class
 class MysteryShip extends Entity {
     constructor(gameWidth) {
         const width = 48;
@@ -561,19 +561,30 @@ class MysteryShip extends Entity {
     draw(ctx) {
         if (!this.active) return;
         
-        // Draw a red UFO-like shape
-        ctx.fillStyle = '#ff0000';
-        ctx.fillRect(this.x, this.y, this.width, this.height);
+        // Draw the mystery ship using the magenta color from the original
+        ctx.save();
+        ctx.imageSmoothingEnabled = false; // Keep the pixelated look
         
-        // Add details to make it look like the mystery ship
-        ctx.fillStyle = '#fff';
-        
-        // Window details
-        for (let i = 0; i < 4; i++) {
-            ctx.fillRect(this.x + 8 + i * 10, this.y + 12, 6, 3);
+        // Use the mystery ship image from assets
+        if (ASSETS.getImage('mysteryShip')) {
+            ctx.drawImage(
+                ASSETS.getImage('mysteryShip'),
+                this.x, this.y,
+                this.width, this.height
+            );
+        } else {
+            // Fallback if image isn't loaded
+            ctx.fillStyle = '#FF00FF'; // Magenta color like in the original
+            ctx.fillRect(this.x, this.y, this.width, this.height);
         }
         
-        // Top dome
-        ctx.fillRect(this.x + 16, this.y + 3, 16, 9);
+        // Debug: Draw hitbox
+        if (window.DEBUG_HITBOXES) {
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(this.x, this.y, this.width, this.height);
+        }
+        
+        ctx.restore();
     }
 } 
