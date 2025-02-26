@@ -488,18 +488,20 @@ class Bullet extends Entity {
 
 class AlienBullet extends Bullet {
     constructor(x, y) {
-        // Create a taller bullet for better hit detection
-        super(x, y, 4, 20, 300); // Increased height from 10 to 20
+        // Much wider bullet for better hit detection (8px wide instead of 4px)
+        // Slower speed (250 instead of 300) to give less time to dodge
+        super(x, y, 8, 20, 250); 
     }
     
     draw(ctx) {
-        // Draw the main bullet
-        ctx.drawImage(ASSETS.getImage('alienBullet'), this.x, this.y, this.width, 10);
+        // Draw the main bullet - still visually 4px wide but centered in the wider hitbox
+        const visualOffset = (this.width - 4) / 2;
+        ctx.drawImage(ASSETS.getImage('alienBullet'), this.x + visualOffset, this.y, 4, 10);
         
         // Draw a trailing effect behind the bullet
         ctx.save();
         ctx.globalAlpha = 0.7;
-        ctx.drawImage(ASSETS.getImage('alienBullet'), this.x, this.y - 10, this.width, 10);
+        ctx.drawImage(ASSETS.getImage('alienBullet'), this.x + visualOffset, this.y - 10, 4, 10);
         ctx.restore();
         
         // Debug: Draw hitbox if debug mode is on

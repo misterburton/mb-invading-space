@@ -242,7 +242,7 @@ class Game {
                     SOUND_SYSTEM.playSound('shoot');
                     
                     // Visual feedback for tap - add highlight
-                    this.explosions.push(new AlienTapHighlight(alien));
+                    // this.explosions.push(new AlienTapHighlight(alien));
                 }
                 
                 return;
