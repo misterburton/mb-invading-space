@@ -96,6 +96,9 @@ class Game {
         // UPDATE ALL BULLETS & COLLISIONS
         this.updateBullets(dt);
         
+        // MAKE SURE this method is called every update
+        this.checkBarrierBulletCollisions();
+        
         // Update explosions
         this.updateExplosions(dt);
         
@@ -528,6 +531,51 @@ class Game {
             if (!this.explosions[i].active) {
                 this.explosions.splice(i, 1);
                 i--;
+            }
+        }
+    }
+    
+    checkBarrierBulletCollisions() {
+        for (let i = 0; i < this.bullets.length; i++) {
+            const bullet = this.bullets[i];
+            
+            for (const barrier of this.barriers) {
+                let hit = false;
+                
+                for (let j = 0; j < barrier.segments.length; j++) {
+                    const segment = barrier.segments[j];
+                    
+                    if (bullet.intersects(segment)) {
+                        // If it's an alien bullet, apply special damage
+                        if (bullet instanceof AlienBullet) {
+                            bullet.damageBarrier(barrier, segment);
+                        } else {
+                            // Regular bullet just damages the hit segment
+                            segment.health -= 1;
+                            
+                            if (segment.health <= 0) {
+                                barrier.segments.splice(j, 1);
+                            }
+                            
+                            // Small spark effect for regular bullets
+                            this.explosions.push(new Explosion(
+                                segment.x + segment.width / 2,
+                                segment.y + segment.height / 2,
+                                10
+                            ));
+                            
+                            SOUND_SYSTEM.playSound('hit');
+                        }
+                        
+                        // Remove the bullet
+                        this.bullets.splice(i, 1);
+                        i--;
+                        hit = true;
+                        break;
+                    }
+                }
+                
+                if (hit) break;
             }
         }
     }

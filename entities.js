@@ -95,8 +95,8 @@ class AlienGrid {
         this.gameWidth = gameWidth;
         this.gameHeight = gameHeight;
         this.moveCount = 0;
-        this.horizontalStep = 5; // Distance to move horizontally in each step
-        this.verticalStep = 5; // How far down to move when hitting an edge
+        this.horizontalStep = 25; // Distance to move horizontally in each step
+        this.verticalStep = 35; // How far down to move when hitting an edge
         this.edgeMargin = 5; // Reduced margin to allow more movement
         this.shouldMoveDown = false; // New flag to control downward movement
         this.groundLineY = gameHeight - 60; // Position of the ground line
@@ -201,19 +201,51 @@ class AlienGrid {
                 for (let i = 0; i < barrier.segments.length; i++) {
                     const segment = barrier.segments[i];
                     
-                    if (alien.x < segment.x + segment.width &&
-                        alien.x + alien.width > segment.x &&
-                        alien.y < segment.y + segment.height &&
-                        alien.y + alien.height > segment.y) {
+                    if (alien.intersects(segment)) {
+                        console.log("Alien collided with barrier"); // Debug log
                         
-                        // Alien is touching a barrier segment, damage it
-                        segment.health--;
+                        // Create LARGER explosion at the collision point
+                        window.game.explosions.push(new Explosion(
+                            alien.x + alien.width / 2,
+                            alien.y + alien.height / 2,
+                            40 // Much larger explosion for alien collision
+                        ));
                         
-                        // Remove segment if destroyed
-                        if (segment.health <= 0) {
-                            barrier.segments.splice(i, 1);
-                            i--; // Adjust index after removal
+                        // Play explosion sound
+                        SOUND_SYSTEM.playSound('explosion');
+                        
+                        // Create MASSIVE explosive damage to surrounding segments
+                        const explosionRadius = 30; // Much larger explosion radius
+                        
+                        // Remove ALL segments within explosion radius
+                        for (let j = 0; j < barrier.segments.length; j++) {
+                            const otherSegment = barrier.segments[j];
+                            
+                            // Calculate distance between segments
+                            const dx = alien.x + alien.width/2 - (otherSegment.x + otherSegment.width/2);
+                            const dy = alien.y + alien.height/2 - (otherSegment.y + otherSegment.height/2);
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            
+                            if (distance <= explosionRadius) {
+                                // Extreme damage - completely destroy segments near center
+                                const damageAmount = distance < 10 ? 10 : Math.ceil(6 * (1 - distance / explosionRadius));
+                                otherSegment.health -= damageAmount;
+                                
+                                // Remove segment if destroyed
+                                if (otherSegment.health <= 0) {
+                                    barrier.segments.splice(j, 1);
+                                    j--; // Adjust index after removal
+                                }
+                            }
                         }
+                        
+                        // Destroy the alien
+                        alien.alive = false;
+                        
+                        // Adjust speed after alien is destroyed
+                        this.adjustSpeed();
+                        
+                        break; // Move to next alien after this collision
                     }
                 }
             }
@@ -449,6 +481,49 @@ class AlienBullet extends Bullet {
     
     draw(ctx) {
         ctx.drawImage(ASSETS.getImage('alienBullet'), this.x, this.y, this.width, this.height);
+    }
+    
+    // Enhanced damage method that destroys multiple barrier segments
+    damageBarrier(barrier, hitSegment) {
+        console.log("Alien bullet damaging barrier"); // Debug log
+        
+        // Create a larger explosion at the impact point
+        if (window.game && window.game.explosions) {
+            window.game.explosions.push(new Explosion(
+                hitSegment.x + hitSegment.width / 2,
+                hitSegment.y + hitSegment.height / 2,
+                20 // Larger explosion for bullet impact
+            ));
+        }
+        
+        // Apply damage to segments within the radius - MUCH more aggressive now
+        const damageRadius = 15; // Increased radius
+        
+        for (let i = 0; i < barrier.segments.length; i++) {
+            const segment = barrier.segments[i];
+            
+            // Calculate distance to impact point
+            const dx = hitSegment.x + hitSegment.width/2 - (segment.x + segment.width/2);
+            const dy = hitSegment.y + hitSegment.height/2 - (segment.y + segment.height/2);
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            if (distance <= damageRadius) {
+                // Much more damage - completely destroy segments at center
+                const damageAmount = distance < 5 ? 10 : Math.ceil(5 * (1 - distance / damageRadius));
+                segment.health -= damageAmount;
+                
+                // Remove segment if destroyed
+                if (segment.health <= 0) {
+                    barrier.segments.splice(i, 1);
+                    i--; // Adjust index after removal
+                }
+            }
+        }
+        
+        // Play hit sound
+        if (window.SOUND_SYSTEM) {
+            SOUND_SYSTEM.playSound('hit');
+        }
     }
 }
 
