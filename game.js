@@ -93,6 +93,9 @@ class Game {
         // Update alien grid
         this.alienGrid.update(dt);
         
+        // Check if protagonist collides with any alien
+        this.protagonist.checkAlienCollision(this.alienGrid.aliens);
+        
         // UPDATE ALL BULLETS & COLLISIONS
         this.updateBullets(dt);
         
@@ -280,8 +283,8 @@ class Game {
             localStorage.setItem('hiScore', this.hiScore);
         }
         
-        // Show game over message
-        this.gameMessage.textContent = playerWon ? 'ALIENS WIN!' : 'EARTH DEFENDED!';
+        // Show game over message - fixed to display proper messages
+        this.gameMessage.textContent = playerWon ? 'EARTH DEFENDED!' : 'EARTH INVADED!';
         this.gameMessage.style.display = 'block';
     }
     
@@ -375,7 +378,8 @@ class Game {
         this.ctx.font = '24px "Press Start 2P", monospace';
         this.ctx.textAlign = 'center';
         
-        const message = this.playerWon ? 'ALIENS WIN!' : 'EARTH DEFENDED!';
+        // Proper victory/defeat messages
+        const message = this.playerWon ? 'EARTH DEFENDED!' : 'EARTH INVADED!';
         this.ctx.fillText(message, this.canvas.width / 2, this.canvas.height / 2);
         
         this.ctx.font = '16px "Press Start 2P", monospace';

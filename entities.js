@@ -179,8 +179,9 @@ class AlienGrid {
             
             // Check if aliens have reached the ground line
             if (lowestY > this.groundLineY) {
-                if (window.game && typeof window.game.gameOver === 'function') {
-                    window.game.gameOver("Aliens have invaded Earth!");
+                if (window.game) {
+                    // Call endGame with playerWon=false (aliens win)
+                    window.game.endGame(false);
                 }
             }
             
@@ -460,6 +461,23 @@ class Protagonist extends Entity {
         if (Math.random() < 0.3) {
             this.direction = Math.random() > 0.5 ? 1 : -1;
         }
+    }
+
+    checkAlienCollision(aliens) {
+        if (!aliens) return false;
+        
+        for (const alien of aliens) {
+            if (!alien.alive) continue;
+            
+            if (this.intersects(alien)) {
+                // Player loses when hit by an alien
+                if (window.game) {
+                    window.game.endGame(false); // Aliens win
+                }
+                return true;
+            }
+        }
+        return false;
     }
 }
 
