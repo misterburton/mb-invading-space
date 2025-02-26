@@ -30,13 +30,22 @@ class Alien extends Entity {
         const width = 16;
         const height = 8;
         
-        super(x, y, width*2, height*2);
+        // For mobile, create a larger hitbox while keeping the visual size the same
+        const isMobile = window.innerWidth < 768;
+        const hitboxSize = isMobile ? 40 : width*2;
+        
+        // Center the hitbox around the alien
+        super(x - (hitboxSize - width*2)/2, y - (hitboxSize - height*2)/2, 
+              hitboxSize, hitboxSize);
+              
         this.type = type;
         this.rowIndex = rowIndex;
         this.colIndex = colIndex;
         this.alive = true;
         this.canShoot = true;
         this.frame = 0; // Current animation frame
+        this.visualWidth = width*2;
+        this.visualHeight = height*2;
     }
     
     update(dt) {
@@ -49,13 +58,17 @@ class Alien extends Entity {
         // Get the right image based on type and current frame
         let imageName = `alien${this.type}`;
         
+        // Calculate where to draw the visual alien (centered in hitbox)
+        const visualX = this.x + (this.width - this.visualWidth)/2;
+        const visualY = this.y + (this.height - this.visualHeight)/2;
+        
         // Scale up and draw the alien at the correct position
         ctx.save();
         ctx.imageSmoothingEnabled = false; // Keep the pixelated look
         ctx.drawImage(
             ASSETS.getImage(imageName), 
-            this.x, this.y, 
-            this.width, this.height
+            visualX, visualY, 
+            this.visualWidth, this.visualHeight
         );
         
         // Debug: Draw hitbox rectangle around the alien
@@ -79,8 +92,9 @@ class Alien extends Entity {
 
 class AlienGrid {
     constructor(gameWidth, gameHeight) {
-        this.rows = 5;
-        this.cols = 11;
+        // Use the game's alien grid size if available
+        this.rows = window.game ? window.game.ALIEN_ROWS : 5;
+        this.cols = window.game ? window.game.ALIEN_COLS : 11;
         this.aliens = [];
         this.direction = 1; // 1 for right, -1 for left
         this.speed = 20; // Initial speed (pixels per second)
@@ -99,6 +113,18 @@ class AlienGrid {
     }
     
     initialize(gameWidth, gameHeight) {
+        // Adjust grid size based on screen width
+        if (gameWidth < 350) {
+            this.rows = 4;
+            this.cols = 6;
+        } else if (gameWidth < 500) {
+            this.rows = 5;
+            this.cols = 8;
+        } else {
+            this.rows = 5;
+            this.cols = 11;
+        }
+        
         const alienWidth = 24;
         const alienHeight = 16;
         const horizontalPadding = 15;

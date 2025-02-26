@@ -632,11 +632,17 @@ class Game {
         
         // Adjust game constants based on screen size
         this.ALIEN_ROWS = 5;
-        this.ALIEN_COLS = 10;
+        this.ALIEN_COLS = 11;
         
-        // Smaller grid on very narrow screens
+        // Smaller grid on narrow screens
+        if (this.canvas.width < 500) {
+            this.ALIEN_COLS = 8; // Reduce from 11 to 8 columns
+        }
+        
+        // Even smaller grid on very narrow screens
         if (this.canvas.width < 350) {
-            this.ALIEN_COLS = 8;
+            this.ALIEN_COLS = 6; // Further reduce to 6 columns
+            this.ALIEN_ROWS = 4; // Reduce from 5 to 4 rows
         }
         
         // Scale alien size proportionally to screen width
