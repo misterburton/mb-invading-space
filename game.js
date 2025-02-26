@@ -235,7 +235,7 @@ class Game {
                 
                 console.log("Alien tapped!");
                 
-                // Make the alien shoot
+                // Make the alien shoot without any restrictions
                 const bullet = alien.shoot();
                 if (bullet) {
                     this.bullets.push(bullet);

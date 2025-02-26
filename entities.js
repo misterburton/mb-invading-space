@@ -69,17 +69,11 @@ class Alien extends Entity {
     }
     
     shoot() {
-        if (!this.canShoot || !this.alive) return null;
+        // Create the bullet at the bottom center of the alien
+        const bulletX = this.x + this.width / 2 - 2; // Center the bullet (width 4)
+        const bulletY = this.y + this.height;
         
-        this.canShoot = false;
-        
-        // Reset shooting ability after a delay (1.5 seconds)
-        setTimeout(() => {
-            this.canShoot = true;
-        }, 1500);
-        
-        // Create a bullet from the bottom center of the alien
-        return new AlienBullet(this.x + this.width / 2, this.y + this.height);
+        return new AlienBullet(bulletX, bulletY);
     }
 }
 
