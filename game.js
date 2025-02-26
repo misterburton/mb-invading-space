@@ -4,6 +4,7 @@ class Game {
     constructor() {
         this.canvas = document.getElementById('game-canvas');
         this.ctx = this.canvas.getContext('2d');
+        this.ctx.imageSmoothingEnabled = false;
         this.lastTime = 0;
         this.running = false;
         this.gameOver = false;
@@ -35,40 +36,39 @@ class Game {
         this.mysteryShip = null;
         this.mysteryShipTimer = 0;
         this.mysteryShipInterval = 15; // Seconds between mystery ships
+        
+        // Initialize game scale factors
+        this.initializeGameScale();
     }
     
     resizeCanvas() {
-        // Clear any existing transformations
-        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-        
-        // Fixed game dimensions - classic arcade style
-        const GAME_WIDTH = 540;  // 3:4 aspect ratio (base size)
-        const GAME_HEIGHT = 720;
-        
-        // Get the display dimensions
+        // Get device dimensions
         const displayWidth = window.innerWidth;
         const displayHeight = window.innerHeight;
         
-        // Calculate scale factor to fit game in viewport
-        let scale = Math.min(
-            displayWidth / GAME_WIDTH,
-            displayHeight / GAME_HEIGHT
-        );
+        // Clear any existing transformations
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         
-        // Apply scale to game container
+        // Disable image smoothing after resetting the context
+        this.ctx.imageSmoothingEnabled = false;
+        
+        // For React Native compatibility, leave a small margin at top/bottom
+        const verticalMargin = 20; // 10px top and 10px bottom
+        
+        // Set container size
         const container = document.getElementById('game-container');
-        container.style.width = `${GAME_WIDTH * scale}px`;
-        container.style.height = `${GAME_HEIGHT * scale}px`;
+        container.style.width = '100%';
+        container.style.height = '100%';
         
-        // Set canvas to fixed dimensions (drawing buffer)
-        this.canvas.width = GAME_WIDTH;
-        this.canvas.height = GAME_HEIGHT;
+        // Set canvas display size to fill viewport (minus margins)
+        this.canvas.style.width = `${displayWidth}px`;
+        this.canvas.style.height = `${displayHeight - verticalMargin}px`;
         
-        // Set canvas CSS size to match container
-        this.canvas.style.width = `${GAME_WIDTH * scale}px`;
-        this.canvas.style.height = `${GAME_HEIGHT * scale}px`;
+        // Set canvas internal size to match display size
+        this.canvas.width = displayWidth;
+        this.canvas.height = displayHeight - verticalMargin;
         
-        console.log(`Canvas resize - Scale: ${scale}, Size: ${GAME_WIDTH}x${GAME_HEIGHT}`);
+        console.log(`Canvas sized to: ${this.canvas.width}x${this.canvas.height}`);
     }
     
     initializeUI() {
@@ -173,36 +173,45 @@ class Game {
     }
     
     drawScore() {
-        // Draw the score display similar to the original
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '16px "Press Start 2P", monospace';
+        this.ctx.fillStyle = '#FFFFFF';
         
-        // SCORE text
+        // Adjust font size based on screen width for narrow devices
+        const isNarrowScreen = this.canvas.width < 400;
+        console.log("Screen width:", this.canvas.width, "isNarrow:", isNarrowScreen);
+        this.ctx.font = `${isNarrowScreen ? 10 : this.SCORE_FONT_SIZE}px 'Press Start 2P', monospace`;
+        
+        // Use percentage-based margins for better scaling
+        const margin = Math.max(15, Math.floor(this.canvas.width * 0.08));
+        
+        // Improved spacing calculation
+        const leftPos = margin;
+        const centerPos = this.canvas.width / 2;
+        const rightPos = this.canvas.width - margin;
+        
+        // Use abbreviated labels on narrow screens
+        const score1Label = isNarrowScreen ? "S<1>" : "SCORE<1>";
+        const hiScoreLabel = isNarrowScreen ? "HI" : "HI-SCORE";
+        const score2Label = isNarrowScreen ? "S<2>" : "SCORE<2>";
+        
+        // Draw text with proper alignment
         this.ctx.textAlign = 'left';
-        this.ctx.fillText("SCORE<1>", 10, 20);
+        this.ctx.fillText(score1Label, leftPos, 20);
         
-        // HI-SCORE text
         this.ctx.textAlign = 'center';
-        this.ctx.fillText("HI-SCORE", this.canvas.width / 2, 20);
+        this.ctx.fillText(hiScoreLabel, centerPos, 20);
         
-        // SCORE<2> text (for 2 player games in original)
         this.ctx.textAlign = 'right';
-        this.ctx.fillText("SCORE<2>", this.canvas.width - 10, 20);
+        this.ctx.fillText(score2Label, rightPos, 20);
         
-        // Format scores with leading zeros
-        const scoreText = this.score.toString().padStart(4, '0');
-        const hiScoreText = this.hiScore.toString().padStart(4, '0');
-        
-        // Draw actual scores
+        // Score values with better vertical spacing
         this.ctx.textAlign = 'left';
-        this.ctx.fillText(scoreText, 50, 40);
+        this.ctx.fillText(this.score.toString().padStart(4, '0'), leftPos, 40);
         
         this.ctx.textAlign = 'center';
-        this.ctx.fillText(hiScoreText, this.canvas.width / 2, 40);
+        this.ctx.fillText(this.hiScore.toString().padStart(4, '0'), centerPos, 40);
         
-        // Second player score (always 0000 in our game)
         this.ctx.textAlign = 'right';
-        this.ctx.fillText("0000", this.canvas.width - 50, 40);
+        this.ctx.fillText("0000", rightPos, 40);
     }
     
     drawLives() {
@@ -315,7 +324,10 @@ class Game {
     
     createBarriers() {
         const barriers = [];
-        const barrierWidth = 60;
+        
+        // Adjust barrier width based on screen width
+        const scaleFactor = this.canvas.width / 440; // Reference width
+        const barrierWidth = Math.min(60, Math.floor(60 * scaleFactor));
         const barrierHeight = 40;
         
         // Get the ground line position if already calculated
@@ -324,12 +336,20 @@ class Game {
         // Position barriers above the ground line
         const barrierY = groundLineY - 120;
         
-        // Create 4 barriers evenly spaced
-        const totalWidth = barrierWidth * 4 + 60 * 3; // 4 barriers with 60px spacing
-        const startX = (this.canvas.width - totalWidth) / 2;
+        // Calculate spacing to ensure barriers fit within viewport
+        const totalBarriers = 4;
+        const availableWidth = this.canvas.width - 40; // 20px margin on each side
+        const maxTotalWidth = availableWidth * 0.9; // Use 90% of available width
         
-        for (let i = 0; i < 4; i++) {
-            const x = startX + i * (barrierWidth + 60);
+        // Calculate spacing based on available width
+        const totalBarriersWidth = barrierWidth * totalBarriers;
+        const spacing = Math.floor((maxTotalWidth - totalBarriersWidth) / (totalBarriers - 1));
+        
+        // Calculate starting X to center the barriers
+        const startX = (this.canvas.width - (totalBarriersWidth + spacing * (totalBarriers - 1))) / 2;
+        
+        for (let i = 0; i < totalBarriers; i++) {
+            const x = startX + i * (barrierWidth + spacing);
             barriers.push(new Barrier(x, barrierY, barrierWidth, barrierHeight));
         }
         
@@ -601,6 +621,45 @@ class Game {
                 if (hit) break;
             }
         }
+    }
+    
+    initializeGameScale() {
+        // Calculate scaling factors based on canvas size
+        this.scaleX = this.canvas.width / 540; // Scale relative to original 540px width
+        this.scaleY = this.canvas.height / 720; // Scale relative to original 720px height
+        
+        console.log(`Game scaling: ${this.scaleX}x, ${this.scaleY}y`);
+        
+        // Adjust game constants based on screen size
+        this.ALIEN_ROWS = 5;
+        this.ALIEN_COLS = 10;
+        
+        // Smaller grid on very narrow screens
+        if (this.canvas.width < 350) {
+            this.ALIEN_COLS = 8;
+        }
+        
+        // Scale alien size proportionally to screen width
+        this.ALIEN_WIDTH = Math.floor(30 * this.scaleX);
+        this.ALIEN_HEIGHT = Math.floor(30 * this.scaleY);
+        this.ALIEN_SPACING_X = Math.floor(15 * this.scaleX);
+        this.ALIEN_SPACING_Y = Math.floor(15 * this.scaleY);
+        
+        // Scale protagonist
+        this.PROTAGONIST_WIDTH = Math.floor(40 * this.scaleX);
+        this.PROTAGONIST_HEIGHT = Math.floor(25 * this.scaleY);
+        this.PROTAGONIST_Y = this.canvas.height - this.PROTAGONIST_HEIGHT - Math.floor(20 * this.scaleY);
+        
+        // Scale barriers
+        this.BARRIER_COUNT = 4;
+        this.BARRIER_WIDTH = Math.floor(70 * this.scaleX);
+        this.BARRIER_HEIGHT = Math.floor(50 * this.scaleY);
+        this.BARRIER_Y = this.PROTAGONIST_Y - this.BARRIER_HEIGHT - Math.floor(20 * this.scaleY);
+        
+        // UI adjustments
+        this.SCORE_FONT_SIZE = Math.max(12, Math.floor(14 * this.scaleY));
+        
+        console.log("Game elements scaled to fit viewport");
     }
 }
 

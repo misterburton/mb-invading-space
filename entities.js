@@ -89,8 +89,8 @@ class AlienGrid {
         this.gameWidth = gameWidth;
         this.gameHeight = gameHeight;
         this.moveCount = 0;
-        this.horizontalStep = 25; // Distance to move horizontally in each step
-        this.verticalStep = 35; // How far down to move when hitting an edge
+        this.horizontalStep = 10; // Distance to move horizontally in each step
+        this.verticalStep = 20; // How far down to move when hitting an edge
         this.edgeMargin = 5; // Reduced margin to allow more movement
         this.shouldMoveDown = false; // New flag to control downward movement
         this.groundLineY = gameHeight - 60; // Position of the ground line

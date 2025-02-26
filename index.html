@@ -4,7 +4,47 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Invading Space</title>
-    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Cache Control -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    
+    <!-- Primary Meta Tags -->
+    <meta name="title" content="Invading Space">
+    <meta name="description" content="Blast into action with Invading Space - a modern remix of the classic alien shooter that defined a generation of arcade gaming!">
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://misterburton.com/works/invading-space/">
+    <meta property="og:title" content="Invading Space">
+    <meta property="og:description" content="Blast into action with Invading Space - a modern remix of the classic alien shooter that defined a generation of arcade gaming!">
+    <meta property="og:image" content="https://misterburton.com/works/invading-space/img/invading-space-logo.gif">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://misterburton.com/works/invading-space/">
+    <meta property="twitter:title" content="Invading Space">
+    <meta property="twitter:description" content="Blast into action with Invading Space - a modern remix of the classic alien shooter that defined a generation of arcade gaming!">
+    <meta property="twitter:image" content="https://misterburton.com/works/invading-space/img/invading-space-logo.gif">
+    
+    <!-- WhatsApp / iMessage -->
+    <meta property="og:site_name" content="Invading Space">
+    
+    <!-- iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Invading Space">
+    <link rel="apple-touch-icon" href="https://misterburton.com/works/invading-space/img/invading-space-logo.gif">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/gif" href="img/invading-space-logo.gif">
+    <link rel="shortcut icon" href="img/invading-space-logo.gif">
+    
+    <!-- CSS with cache busting -->
+    <link rel="stylesheet" href="styles.css?v=<?php echo time(); ?>">
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 <body>
@@ -16,10 +56,44 @@
         </div>
     </div>
     
-    <script src="assets.js"></script>
-    <script src="soundSystem.js"></script>
-    <script src="entities.js"></script>
-    <script src="controls.js"></script>
-    <script src="game.js"></script>
+    <!-- JavaScript with cache busting -->
+    <script src="assets.js?v=<?php echo time(); ?>"></script>
+    <script src="soundSystem.js?v=<?php echo time(); ?>"></script>
+    <script src="entities.js?v=<?php echo time(); ?>"></script>
+    <script src="controls.js?v=<?php echo time(); ?>"></script>
+    <script src="game.js?v=<?php echo time(); ?>"></script>
+    
+    <!-- Alternative JavaScript cache busting if not using PHP -->
+    <script>
+        // Add this script if you're not using PHP
+        document.addEventListener('DOMContentLoaded', function() {
+            // Function to add cache busting parameter to script/link elements
+            function addCacheBusting() {
+                const timestamp = new Date().getTime();
+                const elements = document.querySelectorAll('script[src], link[rel="stylesheet"]');
+                
+                elements.forEach(element => {
+                    let src = element.getAttribute('src') || element.getAttribute('href');
+                    if (src && !src.includes('fonts.googleapis.com')) {
+                        // Only modify local resources, not external ones like Google Fonts
+                        if (src.includes('?')) {
+                            src = src.split('?')[0] + '?v=' + timestamp;
+                        } else {
+                            src = src + '?v=' + timestamp;
+                        }
+                        
+                        if (element.tagName.toLowerCase() === 'script') {
+                            element.setAttribute('src', src);
+                        } else {
+                            element.setAttribute('href', src);
+                        }
+                    }
+                });
+            }
+            
+            // Uncomment the line below if you're not using PHP
+            // addCacheBusting();
+        });
+    </script>
 </body>
 </html> 
