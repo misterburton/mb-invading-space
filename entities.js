@@ -89,11 +89,17 @@ class AlienGrid {
         this.cols = 11;
         this.aliens = [];
         this.direction = 1; // 1 for right, -1 for left
-        this.speed = 20; // pixels per second
+        this.speed = 20; // Initial speed (pixels per second)
         this.moveTimer = 0;
-        this.moveInterval = 1; // seconds between movements
+        this.moveInterval = 1; // Initial move interval
         this.gameWidth = gameWidth;
+        this.gameHeight = gameHeight;
         this.moveCount = 0;
+        this.horizontalStep = 5; // Distance to move horizontally in each step
+        this.verticalStep = 5; // How far down to move when hitting an edge
+        this.edgeMargin = 5; // Reduced margin to allow more movement
+        this.shouldMoveDown = false; // New flag to control downward movement
+        this.groundLineY = gameHeight - 60; // Position of the ground line
         
         this.initialize(gameWidth, gameHeight);
     }
@@ -131,31 +137,85 @@ class AlienGrid {
         if (this.moveTimer >= this.moveInterval) {
             this.moveTimer = 0;
             
-            // Play alien movement sound using the new sound system
+            // Play alien movement sound
             SOUND_SYSTEM.playAlienMove(this.moveCount);
             this.moveCount++;
             
-            // Check if any alien hit the edge
-            let hitEdge = false;
-            
+            // Move aliens first
             for (const alien of this.aliens) {
                 if (!alien.alive) continue;
                 
-                if ((this.direction === 1 && alien.x + alien.width + this.speed > this.gameWidth) ||
-                    (this.direction === -1 && alien.x - this.speed < 0)) {
-                    hitEdge = true;
-                    break;
+                if (this.shouldMoveDown) {
+                    // When moving down, ONLY move down
+                    alien.y += this.verticalStep;
+                } else {
+                    // When not moving horizontally
+                    alien.x += this.horizontalStep * this.direction;
                 }
             }
             
-            if (hitEdge) {
-                this.direction *= -1;
-            }
+            // AFTER moving, check if we need to change direction for next time
+            let leftmostX = this.gameWidth;
+            let rightmostX = 0;
+            let lowestY = 0;
             
-            // Move all aliens
             for (const alien of this.aliens) {
                 if (!alien.alive) continue;
-                alien.x += this.speed * this.direction;
+                leftmostX = Math.min(leftmostX, alien.x);
+                rightmostX = Math.max(rightmostX, alien.x + alien.width);
+                lowestY = Math.max(lowestY, alien.y + alien.height);
+            }
+            
+            // If we moved down this frame, reset the flag
+            if (this.shouldMoveDown) {
+                this.shouldMoveDown = false;
+            } 
+            // Otherwise check if we need to change direction and move down next time
+            else if ((this.direction === 1 && rightmostX > this.gameWidth - this.edgeMargin) ||
+                     (this.direction === -1 && leftmostX < this.edgeMargin)) {
+                this.direction *= -1;
+                this.shouldMoveDown = true;
+            }
+            
+            // Check if aliens have reached the ground line
+            if (lowestY > this.groundLineY) {
+                if (window.game && typeof window.game.gameOver === 'function') {
+                    window.game.gameOver("Aliens have invaded Earth!");
+                }
+            }
+            
+            // Check for collisions with barriers
+            this.checkBarrierCollisions();
+        }
+    }
+    
+    checkBarrierCollisions() {
+        // Check if any alien is touching a barrier
+        if (!window.game || !window.game.barriers) return;
+        
+        for (const alien of this.aliens) {
+            if (!alien.alive) continue;
+            
+            for (const barrier of window.game.barriers) {
+                // Check if alien overlaps with barrier
+                for (let i = 0; i < barrier.segments.length; i++) {
+                    const segment = barrier.segments[i];
+                    
+                    if (alien.x < segment.x + segment.width &&
+                        alien.x + alien.width > segment.x &&
+                        alien.y < segment.y + segment.height &&
+                        alien.y + alien.height > segment.y) {
+                        
+                        // Alien is touching a barrier segment, damage it
+                        segment.health--;
+                        
+                        // Remove segment if destroyed
+                        if (segment.health <= 0) {
+                            barrier.segments.splice(i, 1);
+                            i--; // Adjust index after removal
+                        }
+                    }
+                }
             }
         }
     }
@@ -171,14 +231,22 @@ class AlienGrid {
     }
 
     adjustSpeed() {
-        // Increase speed as aliens are destroyed
         const aliveCount = this.getAliveAliens().length;
         const totalCount = this.rows * this.cols;
         
-        // Adjust speed based on percentage of aliens remaining
+        // More aggressive speed increase
         const percentRemaining = aliveCount / totalCount;
-        this.speed = 20 + (1 - percentRemaining) * 40; // Ranges from 20 to 60
-        this.moveInterval = Math.max(0.3, 1 - (1 - percentRemaining) * 0.7); // Ranges from 1 to 0.3
+        
+        // Adjust move interval to make aliens faster as they're destroyed
+        // From 1 second down to 0.15 seconds between moves
+        this.moveInterval = Math.max(0.15, 1 - (1 - percentRemaining) * 0.85);
+        
+        // Also increase step size slightly for last few aliens
+        this.horizontalStep = 10 + (1 - percentRemaining) * 5;
+    }
+    
+    setGroundLineY(y) {
+        this.groundLineY = y;
     }
 }
 
@@ -532,11 +600,11 @@ class Barrier extends Entity {
     }
 }
 
-// Update the MysteryShip class
+// Add a new MysteryShip class
 class MysteryShip extends Entity {
     constructor(gameWidth) {
-        const width = 48;
-        const height = 21;
+        const width = 32; // Adjust to match image dimensions (scaled)
+        const height = 14; // Adjust to match image dimensions (scaled)
         const y = 70; // Just above the top row of aliens
         
         // Start outside the screen, moving right to left
@@ -561,22 +629,14 @@ class MysteryShip extends Entity {
     draw(ctx) {
         if (!this.active) return;
         
-        // Draw the mystery ship using the magenta color from the original
+        // Use the mystery ship image from assets
         ctx.save();
         ctx.imageSmoothingEnabled = false; // Keep the pixelated look
-        
-        // Use the mystery ship image from assets
-        if (ASSETS.getImage('mysteryShip')) {
-            ctx.drawImage(
-                ASSETS.getImage('mysteryShip'),
-                this.x, this.y,
-                this.width, this.height
-            );
-        } else {
-            // Fallback if image isn't loaded
-            ctx.fillStyle = '#FF00FF'; // Magenta color like in the original
-            ctx.fillRect(this.x, this.y, this.width, this.height);
-        }
+        ctx.drawImage(
+            ASSETS.getImage('mysteryShip'),
+            this.x, this.y,
+            this.width, this.height
+        );
         
         // Debug: Draw hitbox
         if (window.DEBUG_HITBOXES) {

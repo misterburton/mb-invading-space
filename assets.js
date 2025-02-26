@@ -179,7 +179,7 @@ class AssetManager {
             canvas.height = 7;
             ctx.fillStyle = '#FF00FF'; // Magenta color like in the original
             
-            // Create the pixel pattern for the UFO based on the screenshot
+            // Create the pixel pattern for the UFO matching the original Space Invaders
             const ufoPixels = [
                 [0,0,0,0,1,1,1,1,1,1,0,0,0,0],
                 [0,0,1,1,1,1,1,1,1,1,1,1,0,0],

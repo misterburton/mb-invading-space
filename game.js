@@ -475,13 +475,16 @@ class Game {
                 // Play explosion sound
                 SOUND_SYSTEM.playSound('explosion');
                 
-                // Adjust speeds based on remaining aliens
+                // Make sure we call adjustSpeed to update movement speed
                 this.alienGrid.adjustSpeed();
                 this.protagonist.adjustSpeed(this.alienGrid.getAliveAliens().length);
                 
+                console.log("Aliens remaining:", this.alienGrid.getAliveAliens().length);
+                console.log("New move interval:", this.alienGrid.moveInterval);
+                
                 // Check if all aliens are destroyed
                 if (this.alienGrid.getAliveAliens().length === 0) {
-                    this.endGame(false); // Player loses
+                    this.endGame(false); // Player wins
                 }
                 
                 hit = true;
