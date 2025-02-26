@@ -38,24 +38,37 @@ class Game {
     }
     
     resizeCanvas() {
-        // Set canvas dimensions to window size
-        const width = window.innerWidth;
-        const height = window.innerHeight;
+        // Clear any existing transformations
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         
-        // Keep aspect ratio similar to classic Space Invaders
-        const aspectRatio = 3/4; // width/height
+        // Fixed game dimensions - classic arcade style
+        const GAME_WIDTH = 540;  // 3:4 aspect ratio (base size)
+        const GAME_HEIGHT = 720;
         
-        let gameWidth = width;
-        let gameHeight = height;
+        // Get the display dimensions
+        const displayWidth = window.innerWidth;
+        const displayHeight = window.innerHeight;
         
-        if (width / height > aspectRatio) {
-            gameWidth = height * aspectRatio;
-        } else {
-            gameHeight = width / aspectRatio;
-        }
+        // Calculate scale factor to fit game in viewport
+        let scale = Math.min(
+            displayWidth / GAME_WIDTH,
+            displayHeight / GAME_HEIGHT
+        );
         
-        this.canvas.width = gameWidth;
-        this.canvas.height = gameHeight;
+        // Apply scale to game container
+        const container = document.getElementById('game-container');
+        container.style.width = `${GAME_WIDTH * scale}px`;
+        container.style.height = `${GAME_HEIGHT * scale}px`;
+        
+        // Set canvas to fixed dimensions (drawing buffer)
+        this.canvas.width = GAME_WIDTH;
+        this.canvas.height = GAME_HEIGHT;
+        
+        // Set canvas CSS size to match container
+        this.canvas.style.width = `${GAME_WIDTH * scale}px`;
+        this.canvas.style.height = `${GAME_HEIGHT * scale}px`;
+        
+        console.log(`Canvas resize - Scale: ${scale}, Size: ${GAME_WIDTH}x${GAME_HEIGHT}`);
     }
     
     initializeUI() {
@@ -383,6 +396,16 @@ class Game {
     }
     
     updateBullets(dt) {
+        // Add debug info for mobile
+        if (/iPhone|iPad|iPod/i.test(navigator.userAgent) && !this._mobileDebugDone) {
+            console.log("MOBILE DEBUG: Running on iOS device");
+            console.log("Window size:", window.innerWidth, "x", window.innerHeight);
+            console.log("Canvas size:", this.canvas.width, "x", this.canvas.height);
+            console.log("Canvas style:", this.canvas.style.width, this.canvas.style.height);
+            console.log("Device pixel ratio:", window.devicePixelRatio);
+            this._mobileDebugDone = true;
+        }
+        
         for (let i = 0; i < this.bullets.length; i++) {
             this.bullets[i].update(dt);
             
@@ -581,18 +604,44 @@ class Game {
     }
 }
 
-// Wait for all assets to load before starting the game
+// Add this to the end of game.js
+window.addEventListener('DOMContentLoaded', () => {
+    console.log("DOM loaded, waiting for assets...");
+    
+    // Force start after 2 seconds regardless of asset loading state
+    setTimeout(() => {
+        console.log("Starting game after timeout");
+        if (!window.gameStarted) {
+            window.gameStarted = true;
+            const game = new Game();
+            game.start();
+        }
+    }, 2000);
+    
+    // Also try normal asset loading
+    checkAssetsAndStart();
+});
+
 function checkAssetsAndStart() {
-    if (ASSETS.isAllLoaded()) {
+    // Start immediately if we're on iOS
+    if (/iPhone|iPad|iPod/i.test(navigator.userAgent) && !window.gameStarted) {
+        console.log("iOS detected, starting game immediately");
+        window.gameStarted = true;
         const game = new Game();
         game.start();
-    } else {
+        return;
+    }
+    
+    // Normal asset check path
+    if (ASSETS.isAllLoaded() && !window.gameStarted) {
+        console.log("All assets loaded successfully");
+        window.gameStarted = true;
+        const game = new Game();
+        game.start();
+    } else if (!window.gameStarted) {
         setTimeout(checkAssetsAndStart, 100);
     }
 }
-
-// Start checking if assets are loaded
-window.addEventListener('load', checkAssetsAndStart);
 
 // Add a simple visual feedback class for taps
 class TapFeedback {

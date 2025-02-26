@@ -4,22 +4,50 @@ class AssetManager {
         this.sounds = {};
         this.totalAssets = 0;
         this.loadedAssets = 0;
+        this.loadTimeout = 3000; // 3 second timeout for asset loading
+        this.loadingFailed = false;
     }
 
     loadImage(name, src) {
         this.totalAssets++;
         
+        // Create placeholder for immediate use
+        const placeholderCanvas = document.createElement('canvas');
+        placeholderCanvas.width = 32;
+        placeholderCanvas.height = 32;
+        const ctx = placeholderCanvas.getContext('2d');
+        ctx.fillStyle = '#f0f';
+        ctx.fillRect(0, 0, 32, 32);
+        
+        // Store placeholder immediately so we never have missing assets
+        this.images[name] = placeholderCanvas;
+        
         if (!src) {
-            // Generate a placeholder image if source is not provided
             src = this.generatePlaceholder(name);
         }
         
         const img = new Image();
-        img.src = src;
+        
+        // Set timeout to handle failed loads
+        const timeout = setTimeout(() => {
+            console.log(`Image loading timed out: ${name}`);
+            this.loadedAssets++; // Count as loaded even though it failed
+        }, this.loadTimeout);
+        
         img.onload = () => {
+            clearTimeout(timeout);
             this.loadedAssets++;
             this.images[name] = img;
+            console.log(`Image loaded: ${name}`);
         };
+        
+        img.onerror = () => {
+            clearTimeout(timeout);
+            this.loadedAssets++;
+            console.log(`Failed to load image: ${name}`);
+        };
+        
+        img.src = src;
     }
 
     loadSound(name, src) {
