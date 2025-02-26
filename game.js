@@ -282,10 +282,6 @@ class Game {
             this.hiScore = this.score;
             localStorage.setItem('hiScore', this.hiScore);
         }
-        
-        // Show game over message - fixed to display proper messages
-        this.gameMessage.textContent = playerWon ? 'EARTH DEFENDED!' : 'EARTH INVADED!';
-        this.gameMessage.style.display = 'block';
     }
     
     restart() {

@@ -488,11 +488,25 @@ class Bullet extends Entity {
 
 class AlienBullet extends Bullet {
     constructor(x, y) {
-        super(x, y, 4, 10, 300); // Positive speed means downward
+        // Create a taller bullet for better hit detection
+        super(x, y, 4, 20, 300); // Increased height from 10 to 20
     }
     
     draw(ctx) {
-        ctx.drawImage(ASSETS.getImage('alienBullet'), this.x, this.y, this.width, this.height);
+        // Draw the main bullet
+        ctx.drawImage(ASSETS.getImage('alienBullet'), this.x, this.y, this.width, 10);
+        
+        // Draw a trailing effect behind the bullet
+        ctx.save();
+        ctx.globalAlpha = 0.7;
+        ctx.drawImage(ASSETS.getImage('alienBullet'), this.x, this.y - 10, this.width, 10);
+        ctx.restore();
+        
+        // Debug: Draw hitbox if debug mode is on
+        if (window.DEBUG_HITBOXES) {
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.strokeRect(this.x, this.y, this.width, this.height);
+        }
     }
     
     // Enhanced damage method that destroys multiple barrier segments
