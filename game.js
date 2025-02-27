@@ -42,6 +42,13 @@ class Game {
         
         // Initialize visual effects
         this.initializeVisualEffects();
+        
+        this.level = 1;
+        this.levelTransitioning = false;
+        this.levelTransitionTimer = 0;
+        this.levelTransitionDuration = 3; // seconds
+        
+        this.scorePopups = [];
     }
     
     resizeCanvas() {
@@ -113,6 +120,9 @@ class Game {
         // Update alien grid
         this.alienGrid.update(dt);
         
+        // Check if all aliens are destroyed (victory condition)
+        this.checkForVictory();
+        
         // Check if protagonist collides with any alien
         this.protagonist.checkAlienCollision(this.alienGrid.aliens);
         
@@ -127,6 +137,16 @@ class Game {
         
         // Mystery ship
         this.updateMysteryShip(dt);
+        
+        // Update score popups
+        for (let i = 0; i < this.scorePopups.length; i++) {
+            this.scorePopups[i].update(dt);
+            
+            if (!this.scorePopups[i].active) {
+                this.scorePopups.splice(i, 1);
+                i--;
+            }
+        }
     }
     
     draw() {
@@ -181,6 +201,11 @@ class Game {
             this.drawGameOver();
         }
         
+        // Draw score popups
+        for (const popup of this.scorePopups) {
+            popup.draw(this.ctx);
+        }
+        
         // End screen shake effect
         this.endScreenShakeAndFlash(this.ctx);
     }
@@ -225,6 +250,12 @@ class Game {
         
         this.ctx.textAlign = 'right';
         this.ctx.fillText("0000", rightPos, 40);
+        
+        // Draw current level
+        this.ctx.textAlign = 'center';
+        this.ctx.fillStyle = '#AAAAAA';
+        this.ctx.font = `${Math.max(10, Math.floor(10 * this.scaleX))}px 'Press Start 2P', monospace`;
+        this.ctx.fillText(`LEVEL ${this.level}`, this.canvas.width / 2, this.canvas.height - 10);
     }
     
     drawLives() {
@@ -416,16 +447,35 @@ class Game {
     }
     
     drawGameOver() {
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '24px "Press Start 2P", monospace';
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+        
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = `${Math.max(24, Math.floor(24 * this.scaleX))}px 'Press Start 2P', monospace`;
         this.ctx.textAlign = 'center';
         
-        // Proper victory/defeat messages
-        const message = this.playerWon ? 'EARTH DEFENDED!' : 'EARTH INVADED!';
-        this.ctx.fillText(message, this.canvas.width / 2, this.canvas.height / 2);
+        if (this.playerWon) {
+            // Victory message
+            this.ctx.fillText('EARTH SAVED!', centerX, centerY - 40);
+            
+            // Display final score
+            this.ctx.font = `${Math.max(16, Math.floor(16 * this.scaleX))}px 'Press Start 2P', monospace`;
+            this.ctx.fillText(`FINAL SCORE: ${this.score}`, centerX, centerY + 10);
+            
+            // New high score message if applicable
+            if (this.score >= this.hiScore) {
+                this.ctx.fillStyle = '#FFFF00'; // Yellow for high score
+                this.ctx.fillText('NEW HIGH SCORE!', centerX, centerY + 50);
+            }
+        } else {
+            // Game over message
+            this.ctx.fillText('GAME OVER', centerX, centerY);
+        }
         
-        this.ctx.font = '16px "Press Start 2P", monospace';
-        this.ctx.fillText('Tap to play again', this.canvas.width / 2, this.canvas.height / 2 + 40);
+        // Common restart prompt
+        this.ctx.font = `${Math.max(12, Math.floor(12 * this.scaleX))}px 'Press Start 2P', monospace`;
+        this.ctx.fillStyle = '#AAAAAA';
+        this.ctx.fillText('TAP TO PLAY AGAIN', centerX, centerY + 100);
     }
     
     updateBullets(dt) {
@@ -546,6 +596,19 @@ class Game {
                 if (this.alienGrid.getAliveAliens().length === 0) {
                     this.endGame(false); // Player wins
                 }
+                
+                // Add a score popup with color based on points
+                let popupColor;
+                if (points >= 30) popupColor = '#FF00FF'; // High value
+                else if (points >= 20) popupColor = '#FFFF00'; // Medium value
+                else popupColor = '#FFFFFF'; // Basic value
+                
+                this.scorePopups.push(new ScorePopup(
+                    alien.x + alien.width / 2,
+                    alien.y,
+                    points,
+                    popupColor
+                ));
                 
                 hit = true;
                 break;
@@ -801,6 +864,110 @@ class Game {
         
         console.log("Protagonist fired bullet");
     }
+    
+    checkForVictory() {
+        // Check if any aliens are still alive
+        const aliensRemaining = this.alienGrid.aliens.some(alien => alien.alive);
+        
+        if (!aliensRemaining && !this.gameOver) {
+            if (this.level < 3) { // Max 3 levels for now
+                this.startNextLevel();
+            } else {
+                // Final victory after completing all levels
+                this.playerWon = true;
+                this.gameOver = true;
+                this.createVictoryCelebration();
+                
+                // Save high score if current score is higher
+                if (this.score > this.hiScore) {
+                    this.hiScore = this.score;
+                    localStorage.setItem('hiScore', this.hiScore);
+                }
+            }
+        }
+    }
+    
+    createVictoryCelebration() {
+        // Create multiple explosions across the screen for celebration
+        for (let i = 0; i < 15; i++) {
+            setTimeout(() => {
+                // Random position in the play area
+                const x = Math.random() * this.canvas.width;
+                const y = 100 + Math.random() * (this.canvas.height - 200);
+                
+                // Create colorful explosion
+                this.explosions.push(new Explosion(
+                    x, y, 
+                    30 + Math.random() * 30,
+                    ['mysteryShip', 'alien', 'normal'][Math.floor(Math.random() * 3)]
+                ));
+                
+                // Add screen shake
+                this.addScreenShake(3, 0.2);
+                
+                // Add screen flash with random color
+                const flashColors = [
+                    'rgba(255, 255, 0, 0.2)',  // Yellow
+                    'rgba(0, 255, 0, 0.2)',    // Green
+                    'rgba(0, 255, 255, 0.2)',  // Cyan
+                    'rgba(255, 0, 255, 0.2)'   // Magenta
+                ];
+                this.addScreenFlash(
+                    flashColors[Math.floor(Math.random() * flashColors.length)],
+                    0.3, 0.2
+                );
+            }, i * 200); // Stagger the explosions
+        }
+    }
+    
+    startNextLevel() {
+        this.level++;
+        this.levelTransitioning = true;
+        this.levelTransitionTimer = 0;
+        
+        // Clear all bullets
+        this.bullets = [];
+        
+        // Show level message
+        this.showLevelMessage();
+        
+        // Increase difficulty for the next level
+        this.increaseDifficulty();
+    }
+    
+    showLevelMessage() {
+        // Add a centered level message
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+        
+        this.ctx.fillStyle = '#FFFFFF';
+        this.ctx.font = `${Math.max(20, Math.floor(20 * this.scaleX))}px 'Press Start 2P', monospace`;
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(`LEVEL ${this.level}`, centerX, centerY);
+        
+        // Add a screen flash for level transition
+        this.addScreenFlash('rgba(0, 255, 0, 0.3)', 0.3, 0.5);
+    }
+    
+    increaseDifficulty() {
+        // Reinitialize alien grid with increased difficulty
+        this.alienGrid = new AlienGrid(this.canvas.width, this.canvas.height);
+        
+        // Increase alien speed based on level
+        this.alienGrid.speed = 20 + (this.level - 1) * 5;
+        
+        // Increase firing rate
+        this.alienGrid.shootProbability = Math.min(0.02 + (this.level - 1) * 0.005, 0.05);
+        
+        // Reset barriers with less health in higher levels
+        this.barriers = this.createBarriers();
+        if (this.level > 2) {
+            // Damage barriers a bit for higher levels
+            for (const barrier of this.barriers) {
+                barrier.degradeForLevel(this.level);
+            }
+        }
+    }
 }
 
 // Add this to the end of game.js
@@ -903,6 +1070,45 @@ class AlienTapHighlight {
             this.alien.width + 4, 
             this.alien.height + 4
         );
+        ctx.restore();
+    }
+}
+
+// Add a new class for score popups
+class ScorePopup {
+    constructor(x, y, score, color = '#FFFFFF') {
+        this.x = x;
+        this.y = y;
+        this.score = score;
+        this.color = color;
+        this.alpha = 1;
+        this.life = 1; // seconds
+        this.elapsedTime = 0;
+        this.active = true;
+        this.velocity = -60; // pixels per second, upward movement
+    }
+    
+    update(dt) {
+        this.elapsedTime += dt;
+        this.y += this.velocity * dt;
+        
+        // Fade out over time
+        this.alpha = Math.max(0, 1 - this.elapsedTime / this.life);
+        
+        if (this.elapsedTime >= this.life) {
+            this.active = false;
+        }
+    }
+    
+    draw(ctx) {
+        if (!this.active) return;
+        
+        ctx.save();
+        ctx.globalAlpha = this.alpha;
+        ctx.fillStyle = this.color;
+        ctx.font = '14px "Press Start 2P", monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`+${this.score}`, this.x, this.y);
         ctx.restore();
     }
 } 
