@@ -581,6 +581,17 @@ class Protagonist extends Entity {
         this.maxSpeed = 200; // Maximum pixels per second
         this.acceleration = 400; // Acceleration rate
         this.velocity = 0;
+
+        // Add vulnerability system
+        this.vulnerabilityTimer = 0;
+        this.vulnerabilityInterval = 15; // Check every 15 seconds
+        this.vulnerabilityChance = 0.3; // 30% chance to become vulnerable
+        this.vulnerabilityDuration = 0;
+        this.maxVulnerabilityDuration = 1.5; // Max 1.5 seconds of vulnerability
+        this.isVulnerable = false;
+        this.originalSpeed = this.speed;
+        this.blinkTimer = 0;
+        this.blinkInterval = 0.1; // Blink interval for visual feedback
     }
     
     updatePositionFromGround(groundLineY) {
@@ -591,6 +602,25 @@ class Protagonist extends Entity {
     }
     
     update(dt) {
+        // Update vulnerability timing
+        this.updateVulnerability(dt);
+        
+        // Original update logic
+        if (this.damageCooldown > 0) {
+            this.damageCooldown -= dt;
+        }
+        
+        // If vulnerable, prevent or slow movement
+        if (this.isVulnerable) {
+            // Either completely freeze or reduce speed significantly during vulnerability
+            if (Math.random() < 0.7) { // 70% chance to completely freeze
+                // Skip movement update altogether
+                return;
+            }
+            // Otherwise continue with reduced speed (30% chance)
+            this.velocity *= 0.3; // Drastically reduce velocity 
+        }
+        
         // Update position from ground line if available
         if (window.game && window.game.groundLineY) {
             this.updatePositionFromGround(window.game.groundLineY);
@@ -715,6 +745,16 @@ class Protagonist extends Entity {
     }
     
     draw(ctx) {
+        // Add vulnerable visual state
+        if (this.isVulnerable && this.blinkTimer > this.blinkInterval/2) {
+            // Every other blink frame, draw with a reddish tint
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-atop';
+            ctx.fillStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            ctx.restore();
+        }
+        
         // Draw protagonist sprite
         ctx.drawImage(ASSETS.getImage('protagonist'), this.x, this.y, this.width, this.height);
     }
@@ -759,6 +799,48 @@ class Protagonist extends Entity {
             }
         }
         return false;
+    }
+
+    updateVulnerability(dt) {
+        // First, update existing vulnerability if active
+        if (this.isVulnerable) {
+            this.vulnerabilityDuration -= dt;
+            
+            // Update blink effect timer
+            this.blinkTimer -= dt;
+            if (this.blinkTimer <= 0) {
+                this.blinkTimer = this.blinkInterval;
+            }
+            
+            // End vulnerability state if duration expired
+            if (this.vulnerabilityDuration <= 0) {
+                this.isVulnerable = false;
+            }
+            return;
+        }
+        
+        // Check for new vulnerability period
+        this.vulnerabilityTimer += dt;
+        if (this.vulnerabilityTimer >= this.vulnerabilityInterval) {
+            this.vulnerabilityTimer = 0;
+            
+            // Random chance to become vulnerable
+            if (Math.random() < this.vulnerabilityChance) {
+                this.makeVulnerable();
+            }
+        }
+    }
+    
+    makeVulnerable() {
+        this.isVulnerable = true;
+        this.vulnerabilityDuration = Math.random() * this.maxVulnerabilityDuration + 0.5; // 0.5-2.0 seconds
+        console.log(`Protagonist vulnerable for ${this.vulnerabilityDuration.toFixed(1)} seconds`);
+        
+        // Add a visual glitch effect for feedback
+        if (window.game) {
+            window.game.addScreenShake(2, 0.2);
+            window.game.addScreenFlash('rgba(255, 0, 0, 0.2)', 0.2, 0.2);
+        }
     }
 }
 
@@ -1118,6 +1200,113 @@ class MysteryShip extends Entity {
             ctx.lineWidth = 1;
             ctx.strokeRect(this.x, this.y, this.width, this.height);
         }
+        
+        ctx.restore();
+    }
+}
+
+// Create a new visual effect class for tap feedback
+class CirclePulseEffect {
+    constructor(x, y, radius) {
+        this.x = x;
+        this.y = y;
+        this.radius = radius * 0.3; // Start smaller
+        this.maxRadius = radius * 1.4; // End smaller
+        this.duration = 0.4; // Slightly faster animation
+        this.elapsedTime = 0;
+        this.active = true;
+        this.color = '#00ff00'; // Keep the green color
+    }
+    
+    update(dt) {
+        this.elapsedTime += dt;
+        
+        if (this.elapsedTime >= this.duration) {
+            this.active = false;
+            return;
+        }
+        
+        // Grow the circle
+        this.radius = this.radius + (this.maxRadius - this.radius) * (dt / this.duration) * 3;
+    }
+    
+    draw(ctx) {
+        if (!this.active) return;
+        
+        // Calculate alpha (fades out as the circle grows)
+        const alpha = Math.max(0, 1 - this.elapsedTime / this.duration);
+        
+        ctx.save();
+        
+        // Draw a thinner ring for subtlety
+        ctx.strokeStyle = `rgba(0, 255, 0, ${alpha * 0.6})`; // Lower opacity - was just alpha
+        ctx.lineWidth = 1.5; // Thinner line - was 2
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        
+        ctx.restore();
+    }
+}
+
+// Enhance the existing AlienTapHighlight class
+class AlienTapHighlight {
+    constructor(alien) {
+        this.alien = alien;
+        this.duration = 0.3; // Slightly longer duration
+        this.timeLeft = this.duration;
+        this.active = true;
+        this.pulseSpeed = 10; // Speed of highlight pulse
+    }
+    
+    update(dt) {
+        this.timeLeft -= dt;
+        if (this.timeLeft <= 0) {
+            this.active = false;
+        }
+    }
+    
+    draw(ctx) {
+        if (!this.active || !this.alien.alive) return;
+        
+        // Calculate intensity with a pulsing effect
+        const baseIntensity = this.timeLeft / this.duration; // Base fade from 1.0 to 0.0
+        const pulseEffect = Math.sin(this.timeLeft * this.pulseSpeed) * 0.2 + 0.8; // Pulsing between 0.6 and 1.0
+        const intensity = baseIntensity * pulseEffect;
+        
+        ctx.save();
+        
+        // Draw a more visible highlight: multiple layers of outlines
+        
+        // Outer glow - green
+        ctx.strokeStyle = `rgba(0, 255, 0, ${intensity * 0.5})`;
+        ctx.lineWidth = 4;
+        ctx.strokeRect(
+            this.alien.x - 6, 
+            this.alien.y - 6, 
+            this.alien.width + 12, 
+            this.alien.height + 12
+        );
+        
+        // Middle glow - brighter green
+        ctx.strokeStyle = `rgba(100, 255, 100, ${intensity * 0.7})`;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(
+            this.alien.x - 3, 
+            this.alien.y - 3, 
+            this.alien.width + 6, 
+            this.alien.height + 6
+        );
+        
+        // Inner glow - white
+        ctx.strokeStyle = `rgba(255, 255, 255, ${intensity})`;
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+            this.alien.x - 1, 
+            this.alien.y - 1, 
+            this.alien.width + 2, 
+            this.alien.height + 2
+        );
         
         ctx.restore();
     }

@@ -284,38 +284,50 @@ class Game {
     }
     
     checkAlienTap(x, y) {
-        if (this.gameOver) {
-            // Restart the game
-            this.restart();
-            return;
-        }
+        // Find tapped alien
+        let tappedAlien = null;
         
-        console.log("Checking tap at:", x, y);
-        
-        // Check if the tap is on an alien
         for (const alien of this.alienGrid.aliens) {
             if (!alien.alive) continue;
             
             if (x >= alien.x && x <= alien.x + alien.width &&
                 y >= alien.y && y <= alien.y + alien.height) {
-                
-                console.log("Alien tapped!");
-                
-                // Make the alien shoot without any restrictions
-                const bullet = alien.shoot();
-                if (bullet) {
-                    this.bullets.push(bullet);
-                    SOUND_SYSTEM.playSound('shoot');
-                    
-                    // Visual feedback for tap - add highlight
-                    // this.explosions.push(new AlienTapHighlight(alien));
-                }
-                
-                return;
+                tappedAlien = alien;
+                break;
             }
         }
         
-        console.log("No alien hit by tap");
+        if (tappedAlien) {
+            // Create a more visible tap highlight
+            this.createTapHighlight(tappedAlien);
+            
+            // Create bullet from the alien
+            const bullet = tappedAlien.shoot();
+            this.bullets.push(bullet);
+            
+            // Play sound
+            SOUND_SYSTEM.playSound('shoot');
+            
+            // Add small screen shake for feedback
+            this.addScreenShake(2, 0.1);
+            
+            console.log("Alien fired!");
+            return true;
+        }
+        
+        return false;
+    }
+    
+    createTapHighlight(alien) {
+        // Remove the rectangular highlight and only use the circular pulse
+        const pulseEffect = new CirclePulseEffect(
+            alien.x + alien.width/2, 
+            alien.y + alien.height/2,
+            Math.max(alien.width, alien.height)
+        );
+        this.explosions.push(pulseEffect);
+        
+        // No need to add the AlienTapHighlight as we want more subtle feedback
     }
     
     shootRandomAlien() {
@@ -1037,40 +1049,6 @@ class TapFeedback {
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
         ctx.stroke();
-    }
-}
-
-// Add this at the end of game.js, near the TapFeedback class
-class AlienTapHighlight {
-    constructor(alien) {
-        this.alien = alien;
-        this.duration = 0.2; // seconds
-        this.timeLeft = this.duration;
-        this.active = true;
-    }
-    
-    update(dt) {
-        this.timeLeft -= dt;
-        if (this.timeLeft <= 0) {
-            this.active = false;
-        }
-    }
-    
-    draw(ctx) {
-        if (!this.active || !this.alien.alive) return;
-        
-        // Draw a highlight around the alien
-        const intensity = this.timeLeft / this.duration; // 1.0 to 0.0
-        ctx.save();
-        ctx.strokeStyle = `rgba(0, 255, 0, ${intensity})`;
-        ctx.lineWidth = 2;
-        ctx.strokeRect(
-            this.alien.x - 2, 
-            this.alien.y - 2, 
-            this.alien.width + 4, 
-            this.alien.height + 4
-        );
-        ctx.restore();
     }
 }
 
