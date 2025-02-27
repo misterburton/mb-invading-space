@@ -49,6 +49,12 @@ class Game {
         this.levelTransitionDuration = 3; // seconds
         
         this.scorePopups = [];
+        
+        // Player mechanics
+        this.lives = 3; // Player starts with 3 lives
+        this.player2Score = 0; // Separate score for player controlling aliens
+        this.player2Active = false; // Track whether player is controlling aliens
+        this.currentPlayer = 1; // 1 = cannon player, 2 = alien player
     }
     
     resizeCanvas() {
@@ -120,11 +126,18 @@ class Game {
         // Update alien grid
         this.alienGrid.update(dt);
         
-        // Check if all aliens are destroyed (victory condition)
-        this.checkForVictory();
+        // Check if aliens have reached the ground line
+        if (this.alienGrid.checkGroundCollision(this.groundLineY)) {
+            this.gameOver = true;
+            this.playerWon = false;
+            return;
+        }
         
         // Check if protagonist collides with any alien
-        this.protagonist.checkAlienCollision(this.alienGrid.aliens);
+        if (this.protagonist.checkAlienCollision(this.alienGrid.aliens)) {
+            // Collision is already handled in the checkAlienCollision method
+            // through the call to this.protagonistHit()
+        }
         
         // UPDATE ALL BULLETS & COLLISIONS
         this.updateBullets(dt);
@@ -248,8 +261,14 @@ class Game {
         this.ctx.textAlign = 'center';
         this.ctx.fillText(this.hiScore.toString().padStart(4, '0'), centerPos, 40);
         
-        this.ctx.textAlign = 'right';
-        this.ctx.fillText("0000", rightPos, 40);
+        // Update player 2 score if active
+        if (this.player2Active) {
+            this.ctx.textAlign = 'right';
+            this.ctx.fillText(this.player2Score.toString().padStart(4, '0'), rightPos, 40);
+        } else {
+            this.ctx.textAlign = 'right';
+            this.ctx.fillText("0000", rightPos, 40);
+        }
         
         // Draw current level
         this.ctx.textAlign = 'center';
@@ -259,31 +278,31 @@ class Game {
     }
     
     drawLives() {
-        // Draw the remaining lives at the bottom left, above the ground line
-        const livesX = 10;
-        const livesY = this.groundLineY + 10; // Position below the ground line
-        const liveSpacing = 40;
+        const lives = this.lives;
+        const spacing = 25;
+        const size = 20;
+        const startX = 10;
+        const y = this.canvas.height - 30;
         
-        // Draw lives count
-        this.ctx.fillStyle = '#fff';
+        this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '16px "Press Start 2P", monospace';
         this.ctx.textAlign = 'left';
-        this.ctx.fillText(`${this.protagonist.lives}`, livesX, livesY + 12);
+        this.ctx.fillText(`${lives}`, startX, y);
         
-        // Draw remaining life icons (little cannons)
-        for (let i = 0; i < this.protagonist.lives - 1; i++) {
-            const x = livesX + 30 + (i * liveSpacing);
-            this.ctx.drawImage(ASSETS.getImage('protagonist'), x, livesY, 30, 16);
+        // Draw protagonist icons
+        for (let i = 0; i < lives; i++) {
+            const x = startX + 40 + i * spacing;
+            this.ctx.drawImage(ASSETS.getImage('protagonist'), x, y - size, size, size);
         }
-        
-        // Draw CREDIT 00 at the bottom right
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '16px "Press Start 2P", monospace';
-        this.ctx.textAlign = 'right';
-        this.ctx.fillText(`CREDIT 00`, this.canvas.width - 10, livesY + 12);
     }
     
     checkAlienTap(x, y) {
+        // If game is over, handle restart
+        if (this.gameOver) {
+            this.restart();
+            return true;
+        }
+        
         // Find tapped alien
         let tappedAlien = null;
         
@@ -364,18 +383,33 @@ class Game {
     
     restart() {
         // Reset game state
+        this.gameOver = false;
+        this.playerWon = false;
+        this.score = 0;
+        this.player2Score = 0;
+        this.level = 1;
+        this.lives = 3; // Reset lives
+        
+        // Clear game objects
+        this.bullets = [];
+        this.explosions = [];
+        this.scorePopups = [];
+        this.mysteryShip = null;
+        
+        // Reset grid and protagonist
         this.alienGrid = new AlienGrid(this.canvas.width, this.canvas.height);
         this.protagonist = new Protagonist(this.canvas.width, this.canvas.height);
         this.barriers = this.createBarriers();
-        this.bullets = [];
-        this.explosions = [];
         
-        // Reset UI
-        this.gameMessage.style.display = 'none';
+        // Reset timers
+        this.mysteryShipTimer = 0;
         
-        // Reset game flags
-        this.gameOver = false;
-        this.playerWon = false;
+        // Reset visual effects
+        this.currentShake = { x: 0, y: 0 };
+        this.screenShake = { magnitude: 0, duration: 0, timeLeft: 0 };
+        this.screenFlash = { color: null, opacity: 0, duration: 0, timeLeft: 0 };
+        
+        console.log("Game restarted");
     }
     
     createBarriers() {
@@ -467,7 +501,7 @@ class Game {
         this.ctx.textAlign = 'center';
         
         if (this.playerWon) {
-            // Victory message
+            // Victory message when player defeats aliens
             this.ctx.fillText('EARTH SAVED!', centerX, centerY - 40);
             
             // Display final score
@@ -475,60 +509,122 @@ class Game {
             this.ctx.fillText(`FINAL SCORE: ${this.score}`, centerX, centerY + 10);
             
             // New high score message if applicable
-            if (this.score >= this.hiScore) {
+            if (this.score > this.hiScore) {
                 this.ctx.fillStyle = '#FFFF00'; // Yellow for high score
                 this.ctx.fillText('NEW HIGH SCORE!', centerX, centerY + 50);
+                
+                // Save the high score
+                this.hiScore = this.score;
+                localStorage.setItem('hiScore', this.hiScore);
             }
         } else {
-            // Game over message
-            this.ctx.fillText('GAME OVER', centerX, centerY);
+            // Game over message when aliens win
+            this.ctx.fillText('EARTH INVADED!', centerX, centerY - 40);
+            
+            // Display alien score if playing as alien
+            if (this.player2Active) {
+                this.ctx.font = `${Math.max(16, Math.floor(16 * this.scaleX))}px 'Press Start 2P', monospace`;
+                this.ctx.fillText(`ALIEN SCORE: ${this.player2Score}`, centerX, centerY + 10);
+            } else {
+                this.ctx.font = `${Math.max(16, Math.floor(16 * this.scaleX))}px 'Press Start 2P', monospace`;
+                this.ctx.fillText(`YOUR SCORE: ${this.score}`, centerX, centerY + 10);
+            }
         }
         
-        // Common restart prompt
-        this.ctx.font = `${Math.max(12, Math.floor(12 * this.scaleX))}px 'Press Start 2P', monospace`;
+        // Always show the tap to play again message
         this.ctx.fillStyle = '#AAAAAA';
-        this.ctx.fillText('TAP TO PLAY AGAIN', centerX, centerY + 100);
+        this.ctx.font = `${Math.max(14, Math.floor(14 * this.scaleX))}px 'Press Start 2P', monospace`;
+        this.ctx.fillText('TAP TO PLAY AGAIN', centerX, centerY + 80);
     }
     
     updateBullets(dt) {
-        // Add debug info for mobile
-        if (/iPhone|iPad|iPod/i.test(navigator.userAgent) && !this._mobileDebugDone) {
-            console.log("MOBILE DEBUG: Running on iOS device");
-            console.log("Window size:", window.innerWidth, "x", window.innerHeight);
-            console.log("Canvas size:", this.canvas.width, "x", this.canvas.height);
-            console.log("Canvas style:", this.canvas.style.width, this.canvas.style.height);
-            console.log("Device pixel ratio:", window.devicePixelRatio);
-            this._mobileDebugDone = true;
-        }
-        
-        for (let i = 0; i < this.bullets.length; i++) {
-            this.bullets[i].update(dt);
+        // Update all bullets
+        for (let i = this.bullets.length - 1; i >= 0; i--) {
+            const bullet = this.bullets[i];
+            bullet.update(dt);
             
             // Remove off-screen bullets
-            if (this.bullets[i].y < 0 || this.bullets[i].y > this.canvas.height) {
+            if (bullet.y < 0 || bullet.y > this.canvas.height) {
                 this.bullets.splice(i, 1);
-                i--;
                 continue;
             }
             
-            // Check collisions with barriers
+            // Check for barrier collisions
             let hitBarrier = false;
             for (const barrier of this.barriers) {
-                if (barrier.checkBulletCollision(this.bullets[i])) {
+                if (barrier.checkBulletCollision(bullet)) {
                     this.bullets.splice(i, 1);
-                    i--;
                     hitBarrier = true;
                     break;
                 }
             }
-            
             if (hitBarrier) continue;
             
-            // Now rely on bullet type to check collisions
-            if (this.bullets[i] instanceof AlienBullet) {
-                this.checkAlienBulletCollisions(i);
-            } else if (this.bullets[i] instanceof ProtagonistBullet) {
-                this.checkProtagonistBulletCollisions(i);
+            // Check for protagonist bullet collisions with aliens
+            if (bullet instanceof ProtagonistBullet) {
+                let hit = false;
+                for (const alien of this.alienGrid.aliens) {
+                    if (alien.alive && alien.checkBulletCollision(bullet)) {
+                        // Score is handled inside the checkBulletCollision method
+                        this.score += this.getAlienPoints(alien);
+                        hit = true;
+                        break;
+                    }
+                }
+                
+                // Check if bullet hit the mystery ship
+                if (!hit && this.mysteryShip && this.mysteryShip.active && 
+                    bullet.intersects(this.mysteryShip)) {
+                    
+                    // Award points for hitting mystery ship
+                    this.score += this.mysteryShip.points;
+                    
+                    // Create enhanced explosion
+                    this.explosions.push(new Explosion(
+                        this.mysteryShip.x + this.mysteryShip.width / 2,
+                        this.mysteryShip.y + this.mysteryShip.height / 2,
+                        this.mysteryShip.width * 1.5,
+                        'mysteryShip' // Specify explosion type
+                    ));
+                    
+                    // Remove the bullet
+                    this.bullets.splice(i, 1);
+                    
+                    // Deactivate mystery ship
+                    this.mysteryShip.active = false;
+                    
+                    // Play explosion sound
+                    SOUND_SYSTEM.playSound('explosion');
+                }
+                
+                if (hit) {
+                    this.bullets.splice(i, 1);
+                    continue;
+                }
+            } 
+            // Check for alien bullet collisions with protagonist
+            else if (bullet instanceof AlienBullet) {
+                if (this.protagonist.checkBulletCollision(bullet)) {
+                    // Remove the bullet
+                    this.bullets.splice(i, 1);
+                    
+                    // Award points to player 2 if active
+                    if (this.player2Active) {
+                        this.player2Score += 50;
+                        
+                        // Add score popup
+                        this.scorePopups.push(new ScorePopup(
+                            this.protagonist.x + this.protagonist.width/2,
+                            this.protagonist.y,
+                            50,
+                            '#FF00FF' // Purple for player 2 scoring
+                        ));
+                    }
+                    
+                    // Handle protagonist hit
+                    this.protagonistHit();
+                    continue;
+                }
             }
         }
     }
@@ -564,102 +660,29 @@ class Game {
     
     // Handle protagonist bullet collisions
     checkProtagonistBulletCollisions(bulletIndex) {
-        let hit = false;
+        const bullet = this.bullets[bulletIndex];
         
-        // Check if bullet hits any alien
+        // Check collisions with aliens
         for (const alien of this.alienGrid.aliens) {
-            if (!alien.alive) continue;
-            
-            if (this.bullets[bulletIndex].intersects(alien)) {
-                console.log("Hit alien at", alien.x, alien.y);
-                
-                // Destroy the alien
-                alien.alive = false;
-                
-                // Update score based on alien type
-                let points = 10; // Default for bottom rows
-                if (alien.type === 2) points = 20; // Middle rows
-                if (alien.type === 3) points = 30; // Top row
-                
-                this.score += points;
-                
-                // Create enhanced explosion
-                this.explosions.push(new Explosion(
-                    alien.x + alien.width / 2,
-                    alien.y + alien.height / 2,
-                    alien.width,
-                    'alien' // Specify explosion type
-                ));
+            if (alien.alive && alien.checkBulletCollision(bullet)) {
+                // Award points based on alien type
+                this.score += this.getAlienPoints(alien);
                 
                 // Remove the bullet
                 this.bullets.splice(bulletIndex, 1);
-                
-                // Play explosion sound
-                SOUND_SYSTEM.playSound('explosion');
-                
-                // Make sure we call adjustSpeed to update movement speed
-                this.alienGrid.adjustSpeed();
-                this.protagonist.adjustSpeed(this.alienGrid.getAliveAliens().length);
-                
-                console.log("Aliens remaining:", this.alienGrid.getAliveAliens().length);
-                console.log("New move interval:", this.alienGrid.moveInterval);
-                
-                // Check if all aliens are destroyed
-                if (this.alienGrid.getAliveAliens().length === 0) {
-                    this.endGame(false); // Player wins
-                }
-                
-                // Add a score popup with color based on points
-                let popupColor;
-                if (points >= 30) popupColor = '#FF00FF'; // High value
-                else if (points >= 20) popupColor = '#FFFF00'; // Medium value
-                else popupColor = '#FFFFFF'; // Basic value
-                
-                this.scorePopups.push(new ScorePopup(
-                    alien.x + alien.width / 2,
-                    alien.y,
-                    points,
-                    popupColor
-                ));
-                
-                hit = true;
-                break;
+                return true;
             }
         }
         
-        // Check if bullet hits mystery ship
-        if (!hit && this.mysteryShip && this.mysteryShip.active && 
-            this.bullets[bulletIndex].intersects(this.mysteryShip)) {
-            
-            // Award points for hitting mystery ship
-            this.score += this.mysteryShip.points;
-            
-            // Create enhanced explosion
-            this.explosions.push(new Explosion(
-                this.mysteryShip.x + this.mysteryShip.width / 2,
-                this.mysteryShip.y + this.mysteryShip.height / 2,
-                this.mysteryShip.width * 1.5,
-                'mysteryShip' // Specify explosion type
-            ));
-            
-            // Remove the bullet
-            this.bullets.splice(bulletIndex, 1);
-            
-            // Deactivate mystery ship
-            this.mysteryShip.active = false;
-            
-            // Stop the mystery ship sound
-            SOUND_SYSTEM.stopSound('mysteryShip');
-            
-            // Play explosion sound
-            SOUND_SYSTEM.playSound('explosion');
-            
-            // Add more intense screen shake
-            this.addScreenShake(8, 0.4); // Larger shake
-            
-            // Add more intense flash
-            this.addScreenFlash('rgba(255, 100, 255, 0.4)', 0.4, 0.2);
+        // Check collision with mystery ship
+        if (this.mysteryShip && this.mysteryShip.active) {
+            if (this.checkBulletMysteryShipCollision(bullet)) {
+                this.bullets.splice(bulletIndex, 1);
+                return true;
+            }
         }
+        
+        return false;
     }
     
     // Update explosions
@@ -878,23 +901,24 @@ class Game {
     }
     
     checkForVictory() {
-        // Check if any aliens are still alive
+        // Check if all aliens are destroyed
         const aliensRemaining = this.alienGrid.aliens.some(alien => alien.alive);
         
         if (!aliensRemaining && !this.gameOver) {
-            if (this.level < 3) { // Max 3 levels for now
-                this.startNextLevel();
-            } else {
-                // Final victory after completing all levels
-                this.playerWon = true;
-                this.gameOver = true;
-                this.createVictoryCelebration();
-                
-                // Save high score if current score is higher
-                if (this.score > this.hiScore) {
-                    this.hiScore = this.score;
-                    localStorage.setItem('hiScore', this.hiScore);
-                }
+            // Player has won
+            this.gameOver = true;
+            this.playerWon = true;
+            
+            // Create victory effects
+            this.addScreenFlash('rgba(255, 255, 255, 0.3)', 0.7, 0.3);
+            
+            // Play victory sound
+            SOUND_SYSTEM.playSound('victory');
+            
+            // Save high score if applicable
+            if (this.score > this.hiScore) {
+                this.hiScore = this.score;
+                localStorage.setItem('hiScore', this.hiScore);
             }
         }
     }
@@ -979,6 +1003,109 @@ class Game {
                 barrier.degradeForLevel(this.level);
             }
         }
+    }
+    
+    // Update protagonist hit method
+    protagonistHit() {
+        if (this.gameOver) return;
+        
+        // Play explosion sound
+        SOUND_SYSTEM.playSound('explosion');
+        
+        // Create explosion at protagonist position
+        this.explosions.push(new Explosion(
+            this.protagonist.x + this.protagonist.width/2,
+            this.protagonist.y + this.protagonist.height/2,
+            40
+        ));
+        
+        // Add major screen shake
+        this.addScreenShake(10, 0.5);
+        
+        // Add red flash
+        this.addScreenFlash('rgba(255, 0, 0, 0.5)', 0.5, 0.5);
+        
+        // Reduce lives
+        this.lives--;
+        
+        if (this.lives <= 0) {
+            // Game over when all lives are depleted
+            this.gameOver = true;
+            this.playerWon = false; // Player lost
+            
+            // If player 2 (alien player) is active, they score big points
+            if (this.player2Active) {
+                this.player2Score += 1000; // Big bonus for defeating all lives
+            }
+        } else {
+            // Reset protagonist position without ending the game
+            setTimeout(() => {
+                this.protagonist = new Protagonist(this.canvas.width, this.canvas.height);
+            }, 1000);
+        }
+    }
+    
+    // Update tap/click handling when game is over 
+    handleTap(x, y) {
+        if (this.gameOver) {
+            // Reset and restart the game
+            this.restart();
+            return;
+        }
+        
+        // Rest of tap handling code...
+    }
+    
+    getAlienPoints(alien) {
+        // Award points based on alien type
+        let points = 10; // Default for bottom rows
+        if (alien.type === 2) points = 20; // Middle rows
+        if (alien.type === 3) points = 30; // Top row
+        
+        // Add a score popup
+        this.scorePopups.push(new ScorePopup(
+            alien.x + alien.width / 2,
+            alien.y,
+            points,
+            points >= 30 ? '#FF00FF' : (points >= 20 ? '#FFFF00' : '#FFFFFF')
+        ));
+        
+        return points;
+    }
+    
+    // Add this helper method to check mystery ship collisions
+    checkBulletMysteryShipCollision(bullet) {
+        if (!this.mysteryShip || !this.mysteryShip.active) return false;
+        
+        if (bullet.x < this.mysteryShip.x + this.mysteryShip.width &&
+            bullet.x + bullet.width > this.mysteryShip.x &&
+            bullet.y < this.mysteryShip.y + this.mysteryShip.height &&
+            bullet.y + bullet.height > this.mysteryShip.y) {
+            
+            // Award points for hitting mystery ship
+            this.score += this.mysteryShip.points;
+            
+            // Create enhanced explosion
+            this.explosions.push(new Explosion(
+                this.mysteryShip.x + this.mysteryShip.width / 2,
+                this.mysteryShip.y + this.mysteryShip.height / 2,
+                this.mysteryShip.width * 1.5,
+                'mysteryShip' // Specify explosion type
+            ));
+            
+            // Deactivate mystery ship
+            this.mysteryShip.active = false;
+            
+            // Play explosion sound
+            SOUND_SYSTEM.playSound('explosion');
+            
+            // Add more intense screen shake
+            this.addScreenShake(8, 0.4);
+            
+            return true;
+        }
+        
+        return false;
     }
 }
 

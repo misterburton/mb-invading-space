@@ -206,6 +206,40 @@ class Alien extends Entity {
             }, 100);
         }, 100);
     }
+
+    checkBulletCollision(bullet) {
+        if (!this.alive) return false;
+        
+        // Check for collision
+        if (bullet.x < this.x + this.width &&
+            bullet.x + bullet.width > this.x &&
+            bullet.y < this.y + this.height &&
+            bullet.y + bullet.height > this.y) {
+            
+            // Destroy the alien
+            this.alive = false;
+            
+            // Create explosion
+            if (window.game) {
+                window.game.explosions.push(new Explosion(
+                    this.x + this.width / 2,
+                    this.y + this.height / 2,
+                    this.width,
+                    'alien' // Specify explosion type
+                ));
+                
+                // Play explosion sound
+                SOUND_SYSTEM.playSound('explosion');
+                
+                // Make sure we call adjustSpeed to update movement speed
+                window.game.alienGrid.adjustSpeed();
+            }
+            
+            return true;
+        }
+        
+        return false;
+    }
 }
 
 class AlienGrid {
@@ -221,8 +255,8 @@ class AlienGrid {
         this.gameWidth = gameWidth;
         this.gameHeight = gameHeight;
         this.moveCount = 0;
-        this.horizontalStep = 10; // Distance to move horizontally in each step
-        this.verticalStep = 20; // How far down to move when hitting an edge
+        this.horizontalStep = 20; // Distance to move horizontally in each step
+        this.verticalStep = 40; // How far down to move when hitting an edge
         this.edgeMargin = 5; // Reduced margin to allow more movement
         this.shouldMoveDown = false; // New flag to control downward movement
         this.groundLineY = gameHeight - 60; // Position of the ground line
@@ -544,6 +578,16 @@ class AlienGrid {
             }, i * 200); // Staggered firing
         }
     }
+
+    checkGroundCollision(groundLineY) {
+        // Check if any alive alien has reached the ground line
+        for (const alien of this.aliens) {
+            if (alien.alive && alien.y + alien.height >= groundLineY) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 class Protagonist extends Entity {
@@ -784,20 +828,24 @@ class Protagonist extends Entity {
         }
     }
 
-    checkAlienCollision(aliens) {
-        if (!aliens) return false;
-        
-        for (const alien of aliens) {
-            if (!alien.alive) continue;
-            
-            if (this.intersects(alien)) {
-                // Player loses when hit by an alien
-                if (window.game) {
-                    window.game.endGame(false); // Aliens win
-                }
-                return true;
-            }
+    checkBulletCollision(bullet) {
+        // Skip if protagonist is currently invulnerable
+        if (this.damageCooldown > 0) {
+            return false;
         }
+        
+        // Check if bullet intersects with protagonist
+        if (bullet.x < this.x + this.width &&
+            bullet.x + bullet.width > this.x &&
+            bullet.y < this.y + this.height &&
+            bullet.y + bullet.height > this.y) {
+            
+            // Set damage cooldown to prevent multiple hits
+            this.damageCooldown = 2.0; // 2 seconds of invulnerability
+            
+            return true;
+        }
+        
         return false;
     }
 
@@ -841,6 +889,24 @@ class Protagonist extends Entity {
             window.game.addScreenShake(2, 0.2);
             window.game.addScreenFlash('rgba(255, 0, 0, 0.2)', 0.2, 0.2);
         }
+    }
+
+    checkAlienCollision(aliens) {
+        if (!aliens) return false;
+        
+        for (const alien of aliens) {
+            if (!alien.alive) continue;
+            
+            if (this.intersects(alien)) {
+                // Player loses when hit by an alien
+                if (window.game) {
+                    // Use the new protagonist hit system
+                    window.game.protagonistHit();
+                }
+                return true;
+            }
+        }
+        return false;
     }
 }
 
