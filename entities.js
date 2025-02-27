@@ -265,70 +265,77 @@ class AlienGrid {
     }
     
     update(dt) {
-        this.moveTimer += dt;
+        // Find leftmost, rightmost, and lowest aliens for boundary checks
+        let leftmostX = Infinity;
+        let rightmostX = -Infinity;
+        let lowestY = -Infinity;
         
-        if (this.moveTimer >= this.moveInterval) {
-            this.moveTimer = 0;
-            
-            // Play alien movement sound
-            SOUND_SYSTEM.playAlienMove(this.moveCount);
-            this.moveCount++;
-            
-            // Move aliens first
-            for (const alien of this.aliens) {
-                if (!alien.alive) continue;
-                
-                if (this.shouldMoveDown) {
-                    // When moving down, ONLY move down
-                    alien.y += this.verticalStep;
-                } else {
-                    // When not moving horizontally
-                    alien.x += this.horizontalStep * this.direction;
-                }
-            }
-            
-            // AFTER moving, check if we need to change direction for next time
-            let leftmostX = this.gameWidth;
-            let rightmostX = 0;
-            let lowestY = 0;
-            
-            for (const alien of this.aliens) {
-                if (!alien.alive) continue;
+        // Find alive aliens with extreme positions
+        for (const alien of this.aliens) {
+            if (alien.alive) {
                 leftmostX = Math.min(leftmostX, alien.x);
                 rightmostX = Math.max(rightmostX, alien.x + alien.width);
                 lowestY = Math.max(lowestY, alien.y + alien.height);
             }
+        }
+        
+        // Update movement timer
+        this.moveTimer += dt;
+        if (this.moveTimer >= this.moveInterval) {
+            this.moveTimer = 0;
             
-            // If we moved down this frame, reset the flag
-            if (this.shouldMoveDown) {
-                this.shouldMoveDown = false;
-            } 
-            // Otherwise check if we need to change direction and move down next time
-            else if ((this.direction === 1 && rightmostX > this.gameWidth - this.edgeMargin) ||
-                     (this.direction === -1 && leftmostX < this.edgeMargin)) {
-                
-                // Notify all aliens to prepare for downward movement (squash animation)
-                for (const alien of this.aliens) {
-                    if (alien.alive) {
-                        alien.prepareToMoveDown();
-                    }
-                }
+            // Move aliens horizontally
+            let moveDown = false;
+            
+            // Check if aliens hit the edge of the screen
+            if ((this.direction === 1 && rightmostX > this.gameWidth - this.edgeMargin) ||
+                (this.direction === -1 && leftmostX < this.edgeMargin)) {
                 
                 // Reverse direction
                 this.direction *= -1;
                 
-                // Add medium screen shake when aliens change direction
+                // Set flag to move down
+                moveDown = true;
+                
+                // Notify all aliens to prepare for downward movement (animation)
+                for (const alien of this.aliens) {
+                    if (alien.alive) {
+                        alien.prepareToMoveDown();
+                        alien.setMoveDirection(this.direction);
+                    }
+                }
+                
+                // Add screen shake and flash effects when changing direction
                 if (window.game) {
                     window.game.addScreenShake(4, 0.3);
-                    
-                    // Add red flash when aliens move down (gets more intense as they get closer)
                     const distanceToBottom = window.game.groundLineY - lowestY;
                     const flashIntensity = Math.min(0.5, 0.2 + (1 - distanceToBottom / 400) * 0.3);
                     window.game.addScreenFlash(`rgba(255, 0, 0, ${flashIntensity})`, flashIntensity, 0.2);
                 }
                 
-                // ... existing code for moving down ...
+                // IMPORTANT: Move all aliens down
+                if (moveDown) {
+                    for (const alien of this.aliens) {
+                        if (alien.alive) {
+                            alien.y += this.verticalStep;
+                        }
+                    }
+                    console.log("Aliens moving down by", this.verticalStep, "pixels");
+                }
+            } else {
+                // Regular horizontal movement
+                for (const alien of this.aliens) {
+                    if (alien.alive) {
+                        alien.x += this.horizontalStep * this.direction;
+                        alien.update(dt); // Make sure alien animations update
+                        alien.setMoveDirection(this.direction);
+                    }
+                }
             }
+            
+            // Play alien movement sound
+            SOUND_SYSTEM.playAlienMove(this.moveCount);
+            this.moveCount++;
             
             // Check if aliens have reached the ground line
             if (lowestY > this.groundLineY) {
