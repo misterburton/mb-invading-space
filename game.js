@@ -39,6 +39,9 @@ class Game {
         
         // Initialize game scale factors
         this.initializeGameScale();
+        
+        // Initialize visual effects
+        this.initializeVisualEffects();
     }
     
     resizeCanvas() {
@@ -78,6 +81,7 @@ class Game {
     start() {
         if (!this.running) {
             this.running = true;
+            this.initializeVisualEffects(); // Initialize visual effects
             requestAnimationFrame(this.gameLoop.bind(this));
         }
     }
@@ -99,6 +103,9 @@ class Game {
     
     update(dt) {
         if (this.gameOver) return;
+        
+        // Update visual effects
+        this.updateVisualEffects(dt);
         
         // Update protagonist
         this.protagonist.update(dt);
@@ -125,6 +132,9 @@ class Game {
     draw() {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
+        // Begin screen shake effect
+        this.applyScreenShakeAndFlash(this.ctx);
         
         // Draw score
         this.drawScore();
@@ -170,6 +180,9 @@ class Game {
         if (this.gameOver) {
             this.drawGameOver();
         }
+        
+        // End screen shake effect
+        this.endScreenShakeAndFlash(this.ctx);
     }
     
     drawScore() {
@@ -508,11 +521,12 @@ class Game {
                 
                 this.score += points;
                 
-                // Create explosion at alien position
+                // Create enhanced explosion
                 this.explosions.push(new Explosion(
                     alien.x + alien.width / 2,
                     alien.y + alien.height / 2,
-                    alien.width // Size based on alien width
+                    alien.width,
+                    'alien' // Specify explosion type
                 ));
                 
                 // Remove the bullet
@@ -545,11 +559,12 @@ class Game {
             // Award points for hitting mystery ship
             this.score += this.mysteryShip.points;
             
-            // Create explosion
+            // Create enhanced explosion
             this.explosions.push(new Explosion(
                 this.mysteryShip.x + this.mysteryShip.width / 2,
                 this.mysteryShip.y + this.mysteryShip.height / 2,
-                this.mysteryShip.width
+                this.mysteryShip.width * 1.5,
+                'mysteryShip' // Specify explosion type
             ));
             
             // Remove the bullet
@@ -563,6 +578,12 @@ class Game {
             
             // Play explosion sound
             SOUND_SYSTEM.playSound('explosion');
+            
+            // Add more intense screen shake
+            this.addScreenShake(8, 0.4); // Larger shake
+            
+            // Add more intense flash
+            this.addScreenFlash('rgba(255, 100, 255, 0.4)', 0.4, 0.2);
         }
     }
     
@@ -666,6 +687,119 @@ class Game {
         this.SCORE_FONT_SIZE = Math.max(12, Math.floor(14 * this.scaleY));
         
         console.log("Game elements scaled to fit viewport");
+    }
+    
+    initializeVisualEffects() {
+        // Screen shake properties
+        this.shakeIntensity = 0;
+        this.shakeDuration = 0;
+        this.shakeElapsedTime = 0;
+        this.shakeOffsetX = 0;
+        this.shakeOffsetY = 0;
+        
+        // Screen flash properties
+        this.flashColor = null;
+        this.flashAlpha = 0;
+        this.flashDuration = 0;
+        this.flashElapsedTime = 0;
+    }
+    
+    addScreenShake(intensity, duration) {
+        // Use the larger intensity
+        this.shakeIntensity = Math.max(this.shakeIntensity, intensity);
+        this.shakeDuration = Math.max(this.shakeDuration, duration);
+        this.shakeElapsedTime = 0;
+    }
+    
+    addScreenFlash(color, alpha, duration) {
+        this.flashColor = color;
+        this.flashAlpha = alpha;
+        this.flashDuration = duration;
+        this.flashElapsedTime = 0;
+    }
+    
+    updateVisualEffects(dt) {
+        // Update screen shake
+        if (this.shakeDuration > 0) {
+            this.shakeElapsedTime += dt;
+            
+            if (this.shakeElapsedTime < this.shakeDuration) {
+                // Calculate decreasing intensity over time
+                const currentIntensity = this.shakeIntensity * (1 - this.shakeElapsedTime / this.shakeDuration);
+                
+                // Random offset that changes every frame
+                this.shakeOffsetX = (Math.random() * 2 - 1) * currentIntensity;
+                this.shakeOffsetY = (Math.random() * 2 - 1) * currentIntensity;
+            } else {
+                // Reset shake
+                this.shakeDuration = 0;
+                this.shakeIntensity = 0;
+                this.shakeOffsetX = 0;
+                this.shakeOffsetY = 0;
+            }
+        }
+        
+        // Update screen flash
+        if (this.flashDuration > 0) {
+            this.flashElapsedTime += dt;
+            
+            if (this.flashElapsedTime >= this.flashDuration) {
+                // Reset flash
+                this.flashDuration = 0;
+                this.flashAlpha = 0;
+            }
+        }
+    }
+    
+    applyScreenShakeAndFlash(ctx) {
+        // Apply screen shake
+        if (this.shakeOffsetX !== 0 || this.shakeOffsetY !== 0) {
+            ctx.save();
+            ctx.translate(this.shakeOffsetX, this.shakeOffsetY);
+        }
+        
+        // Apply screen flash as overlay after drawing all game elements
+        if (this.flashDuration > 0 && this.flashColor) {
+            const currentAlpha = this.flashAlpha * (1 - this.flashElapsedTime / this.flashDuration);
+            
+            if (currentAlpha > 0) {
+                ctx.save();
+                ctx.fillStyle = this.flashColor;
+                ctx.globalAlpha = currentAlpha;
+                ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                ctx.restore();
+            }
+        }
+    }
+    
+    endScreenShakeAndFlash(ctx) {
+        // Restore context if shaking
+        if (this.shakeOffsetX !== 0 || this.shakeOffsetY !== 0) {
+            ctx.restore();
+        }
+    }
+    
+    // Complete the protagonistShoot method
+    protagonistShoot() {
+        // Create bullet directly
+        const bullet = new ProtagonistBullet(
+            this.protagonist.x + this.protagonist.width / 2,
+            this.protagonist.y
+        );
+        
+        // Add to bullets array
+        this.bullets.push(bullet);
+        
+        // Play sound
+        SOUND_SYSTEM.playSound('shoot');
+        
+        // Add small screen shake
+        this.addScreenShake(2, 0.1);
+        
+        // Add small white flash
+        this.addScreenFlash('rgba(255, 255, 255, 0.2)', 0.2, 0.1);
+        
+        console.log("Protagonist fired bullet");
     }
 }
 

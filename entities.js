@@ -43,32 +43,73 @@ class Alien extends Entity {
         this.colIndex = colIndex;
         this.alive = true;
         this.canShoot = true;
-        this.frame = 0; // Current animation frame
         this.visualWidth = width*2;
         this.visualHeight = height*2;
+        
+        // Enhanced animation properties
+        this.frameCount = 4; // 4 frames of animation
+        this.currentFrame = Math.floor(Math.random() * this.frameCount); // Randomize starting frame for variety
+        this.animTimer = 0;
+        this.animInterval = 0.2; // Seconds between frame changes
+        
+        // Direction-specific animation
+        this.lastMoveDirection = 1; // 1 for right, -1 for left
+        this.preparingToMoveDown = false; // Flag for squash animation when changing direction
     }
     
     update(dt) {
-        // Movement will be handled by the AlienGrid
+        // Update animation timing
+        this.animTimer += dt;
+        if (this.animTimer >= this.animInterval) {
+            this.animTimer = 0;
+            this.currentFrame = (this.currentFrame + 1) % this.frameCount;
+        }
     }
     
     draw(ctx) {
         if (!this.alive) return;
         
-        // Get the right image based on type and current frame
-        let imageName = `alien${this.type}`;
-        
         // Calculate where to draw the visual alien (centered in hitbox)
         const visualX = this.x + (this.width - this.visualWidth)/2;
         const visualY = this.y + (this.height - this.visualHeight)/2;
         
-        // Scale up and draw the alien at the correct position
         ctx.save();
         ctx.imageSmoothingEnabled = false; // Keep the pixelated look
-        ctx.drawImage(
-            ASSETS.getImage(imageName), 
-            visualX, visualY, 
-            this.visualWidth, this.visualHeight
+        
+        // Apply squash and stretch based on movement state
+        let scaleX = 1;
+        let scaleY = 1;
+        let offsetX = 0;
+        let offsetY = 0;
+        
+        if (this.preparingToMoveDown) {
+            // Squash effect when about to move down
+            scaleX = 1.2;
+            scaleY = 0.8;
+            offsetY = this.visualHeight * 0.1;
+        } else if (this.justMovedDown) {
+            // Stretch effect right after moving down
+            scaleX = 0.9;
+            scaleY = 1.3;
+            offsetY = -this.visualHeight * 0.1;
+        } else {
+            // Slight movement based on animation frame during normal movement
+            const frameOffset = (this.currentFrame % 2) * 0.05;
+            scaleX = 1 - frameOffset;
+            scaleY = 1 + frameOffset;
+        }
+        
+        // Calculate animation offset for tentacles based on direction
+        const tentacleOffset = this.lastMoveDirection * 2 * (this.currentFrame % 2);
+        
+        // Draw alien with animation
+        this.drawAnimatedAlien(
+            ctx, 
+            visualX + offsetX, 
+            visualY + offsetY, 
+            this.visualWidth * scaleX, 
+            this.visualHeight * scaleY,
+            tentacleOffset
         );
         
         // Debug: Draw hitbox rectangle around the alien
@@ -81,12 +122,84 @@ class Alien extends Entity {
         ctx.restore();
     }
     
+    drawAnimatedAlien(ctx, x, y, width, height, tentacleOffset) {
+        // Get base image
+        const baseImage = ASSETS.getImage(`alien${this.type}`);
+        
+        // Draw the base image
+        ctx.drawImage(baseImage, x, y, width, height);
+        
+        // Add animated parts based on alien type and frame
+        ctx.fillStyle = '#ffffff';
+        
+        if (this.type === 1) { // Squid
+            // Draw animated tentacles
+            const tentacleWidth = Math.max(1, Math.floor(width * 0.05));
+            const tentacleHeight = Math.max(1, Math.floor(height * 0.15));
+            const baseY = y + height * 0.85;
+            
+            // Left tentacles with animation offset
+            ctx.fillRect(x + width * 0.2 - tentacleOffset, baseY, tentacleWidth, tentacleHeight);
+            ctx.fillRect(x + width * 0.4 + tentacleOffset, baseY, tentacleWidth, tentacleHeight);
+            
+            // Right tentacles with animation offset
+            ctx.fillRect(x + width * 0.6 - tentacleOffset, baseY, tentacleWidth, tentacleHeight);
+            ctx.fillRect(x + width * 0.8 + tentacleOffset, baseY, tentacleWidth, tentacleHeight);
+        } 
+        else if (this.type === 2) { // Crab
+            // Animate the crab's claws
+            const clawSize = Math.max(2, Math.floor(width * 0.1));
+            const clawY = y + height * 0.65;
+            const leftOffset = this.currentFrame % 2 === 0 ? -1 : 1;
+            const rightOffset = -leftOffset;
+            
+            // Left claw
+            ctx.fillRect(x - clawSize * 0.5 + leftOffset, clawY, clawSize, clawSize);
+            
+            // Right claw
+            ctx.fillRect(x + width - clawSize * 0.5 + rightOffset, clawY, clawSize, clawSize);
+        }
+        else if (this.type === 3) { // Octopus
+            // Animate the octopus's tentacles
+            const animOffset = (this.currentFrame % 2) * 2;
+            const tentacleWidth = Math.max(2, Math.floor(width * 0.08));
+            const tentacleHeight = Math.max(2, Math.floor(height * 0.1));
+            const baseY = y + height * 0.9;
+            
+            // Draw alternating tentacle pattern
+            for (let i = 0; i < 4; i++) {
+                const offset = i % 2 === 0 ? animOffset : -animOffset;
+                const xPos = x + width * (0.2 + i * 0.2) + offset;
+                ctx.fillRect(xPos, baseY, tentacleWidth, tentacleHeight);
+            }
+        }
+    }
+    
     shoot() {
         // Create the bullet at the bottom center of the alien
         const bulletX = this.x + this.width / 2 - 2; // Center the bullet (width 4)
         const bulletY = this.y + this.height;
         
         return new AlienBullet(bulletX, bulletY);
+    }
+    
+    setMoveDirection(direction) {
+        this.lastMoveDirection = direction;
+    }
+    
+    prepareToMoveDown() {
+        this.preparingToMoveDown = true;
+        
+        // Reset after short delay
+        setTimeout(() => {
+            this.preparingToMoveDown = false;
+            this.justMovedDown = true;
+            
+            // Reset stretch effect after movement
+            setTimeout(() => {
+                this.justMovedDown = false;
+            }, 100);
+        }, 100);
     }
 }
 
@@ -193,8 +306,28 @@ class AlienGrid {
             // Otherwise check if we need to change direction and move down next time
             else if ((this.direction === 1 && rightmostX > this.gameWidth - this.edgeMargin) ||
                      (this.direction === -1 && leftmostX < this.edgeMargin)) {
+                
+                // Notify all aliens to prepare for downward movement (squash animation)
+                for (const alien of this.aliens) {
+                    if (alien.alive) {
+                        alien.prepareToMoveDown();
+                    }
+                }
+                
+                // Reverse direction
                 this.direction *= -1;
-                this.shouldMoveDown = true;
+                
+                // Add medium screen shake when aliens change direction
+                if (window.game) {
+                    window.game.addScreenShake(4, 0.3);
+                    
+                    // Add red flash when aliens move down (gets more intense as they get closer)
+                    const distanceToBottom = window.game.groundLineY - lowestY;
+                    const flashIntensity = Math.min(0.5, 0.2 + (1 - distanceToBottom / 400) * 0.3);
+                    window.game.addScreenFlash(`rgba(255, 0, 0, ${flashIntensity})`, flashIntensity, 0.2);
+                }
+                
+                // ... existing code for moving down ...
             }
             
             // Check if aliens have reached the ground line
@@ -207,6 +340,14 @@ class AlienGrid {
             
             // Check for collisions with barriers
             this.checkBarrierCollisions();
+        }
+        
+        // When regular movement happens, update all aliens' move direction
+        for (const alien of this.aliens) {
+            if (alien.alive) {
+                alien.setMoveDirection(this.direction);
+                alien.update(dt); // Make sure alien animations update
+            }
         }
     }
     
@@ -592,65 +733,157 @@ class ProtagonistBullet extends Bullet {
 }
 
 class Explosion {
-    constructor(x, y, size) {
+    constructor(x, y, size, type = 'normal') {
         this.x = x;
         this.y = y;
         this.size = size || 40;
-        this.frame = 0;
-        this.maxFrames = 8;
-        this.frameTime = 0;
-        this.frameInterval = 0.1; // seconds per frame
+        this.particles = [];
         this.active = true;
-        this.isPixelated = true; // Use pixelated style
+        this.duration = 0.8; // Total duration in seconds
+        this.elapsedTime = 0;
+        this.type = type; // normal, alien, mysteryShip, barrier
+        
+        // Create particles
+        this.createParticles();
+    }
+    
+    createParticles() {
+        const particleCount = Math.min(40, Math.floor(this.size * 0.8));
+        
+        // Color schemes for different explosion types
+        let colors;
+        switch(this.type) {
+            case 'mysteryShip':
+                colors = ['#ff00ff', '#ff44ff', '#ff88ff', '#ffaaff', '#ffffff'];
+                break;
+            case 'barrier':
+                colors = ['#00ff00', '#44ff44', '#88ff88', '#aaffaa', '#ffffff'];
+                break;
+            case 'alien':
+                colors = ['#ff0000', '#ff4400', '#ff8800', '#ffaa00', '#ffff00', '#ffffff'];
+                break;
+            default: // 'normal'
+                colors = ['#ffffff', '#ffff00', '#ffaa00', '#ff8800', '#ff4400', '#ff0000'];
+                break;
+        }
+        
+        for (let i = 0; i < particleCount; i++) {
+            // Create particle with random properties
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * this.size * 0.3 + this.size * 0.1;
+            const size = Math.random() * Math.max(2, this.size * 0.1) + Math.max(1, this.size * 0.05);
+            const life = Math.random() * 0.5 + 0.3; // 0.3 to 0.8 seconds
+            
+            // Random color from scheme
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            
+            this.particles.push({
+                x: this.x,
+                y: this.y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                size: size,
+                color: color,
+                alpha: 1,
+                life: life,
+                gravity: Math.random() * 50 + 20, // Add some gravity for falling effect
+                rotation: Math.random() * Math.PI * 2,
+                rotationSpeed: (Math.random() - 0.5) * 5,
+                shape: Math.random() > 0.7 ? 'square' : 'circle', // Mix of shapes
+            });
+        }
+        
+        // Add a central flash
+        this.flash = {
+            size: this.size * 0.8,
+            alpha: 1,
+            duration: 0.15
+        };
     }
     
     update(dt) {
-        this.frameTime += dt;
+        this.elapsedTime += dt;
         
-        if (this.frameTime >= this.frameInterval) {
-            this.frameTime = 0;
-            this.frame++;
-            
-            if (this.frame >= this.maxFrames) {
-                this.active = false;
+        if (this.elapsedTime >= this.duration) {
+            this.active = false;
+            return;
+        }
+        
+        // Update central flash
+        if (this.flash) {
+            this.flash.alpha -= dt / this.flash.duration;
+            if (this.flash.alpha <= 0) {
+                this.flash = null;
             }
+        }
+        
+        // Update each particle
+        for (let i = 0; i < this.particles.length; i++) {
+            const p = this.particles[i];
+            
+            // Apply velocity
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            
+            // Apply gravity
+            p.vy += p.gravity * dt;
+            
+            // Apply rotation
+            p.rotation += p.rotationSpeed * dt;
+            
+            // Fade out based on life
+            p.alpha = Math.max(0, 1 - (this.elapsedTime / p.life));
+            
+            // Shrink particle over time
+            p.size *= 0.97;
+            
+            // Remove dead particles
+            if (p.alpha <= 0 || p.size <= 0.5) {
+                this.particles.splice(i, 1);
+                i--;
+            }
+        }
+        
+        // If all particles are gone, deactivate
+        if (this.particles.length === 0 && !this.flash) {
+            this.active = false;
         }
     }
     
     draw(ctx) {
         if (!this.active) return;
         
-        if (this.isPixelated) {
-            // Pixelated explosion animation
-            const size = this.size * (1 - this.frame / this.maxFrames * 0.5);
-            const halfSize = size / 2;
-            
-            ctx.fillStyle = `rgb(255, ${255 - this.frame * 30}, 0)`;
-            
-            // Draw a pixelated explosion
-            const pixelSize = Math.max(2, Math.floor(size / 8));
-            
-            for (let y = -halfSize; y < halfSize; y += pixelSize) {
-                for (let x = -halfSize; x < halfSize; x += pixelSize) {
-                    // Create some randomness in the pattern
-                    if (Math.random() > 0.3 && x*x + y*y < halfSize * halfSize) {
-                        ctx.fillRect(
-                            this.x + x, 
-                            this.y + y, 
-                            pixelSize, 
-                            pixelSize
-                        );
-                    }
-                }
-            }
-        } else {
-            // Simple radial explosion animation (fallback)
-            const radius = this.size / 2 * (1 - this.frame / this.maxFrames);
-            
-            ctx.fillStyle = `rgb(255, ${255 - this.frame * 30}, 0)`;
+        // Draw flash
+        if (this.flash && this.flash.alpha > 0) {
+            ctx.save();
+            ctx.globalAlpha = this.flash.alpha;
+            ctx.fillStyle = '#ffffff';
             ctx.beginPath();
-            ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+            ctx.arc(this.x, this.y, this.flash.size, 0, Math.PI * 2);
             ctx.fill();
+            ctx.restore();
+        }
+        
+        // Draw particles
+        for (const p of this.particles) {
+            ctx.save();
+            ctx.globalAlpha = p.alpha;
+            ctx.fillStyle = p.color;
+            
+            // Translate to particle center for rotation
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.rotation);
+            
+            // Draw particle based on shape
+            if (p.shape === 'square') {
+                ctx.fillRect(-p.size/2, -p.size/2, p.size, p.size);
+            } else {
+                ctx.beginPath();
+                ctx.arc(0, 0, p.size/2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            
+            ctx.restore();
         }
     }
 }
