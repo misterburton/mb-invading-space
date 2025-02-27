@@ -177,10 +177,15 @@ class Alien extends Entity {
     
     shoot() {
         // Create the bullet at the bottom center of the alien
-        const bulletX = this.x + this.width / 2 - 2; // Center the bullet (width 4)
+        const bulletX = this.x + this.width / 2 - 2;
         const bulletY = this.y + this.height;
         
-        return new AlienBullet(bulletX, bulletY);
+        // Chance of firing a fast bullet increases with level
+        const level = window.game ? window.game.level : 1;
+        const fastBulletChance = 0.1 * level; // 10% at level 1, 20% at level 2, etc.
+        
+        const bulletType = Math.random() < fastBulletChance ? 'fast' : 'normal';
+        return new AlienBullet(bulletX, bulletY, bulletType);
     }
     
     setMoveDirection(direction) {
@@ -221,6 +226,11 @@ class AlienGrid {
         this.edgeMargin = 5; // Reduced margin to allow more movement
         this.shouldMoveDown = false; // New flag to control downward movement
         this.groundLineY = gameHeight - 60; // Position of the ground line
+        
+        // Special attack properties
+        this.specialAttackTimer = 0;
+        this.specialAttackInterval = 10; // Seconds between special attacks
+        this.specialAttackChance = 0.3; // 30% chance when timer expires
         
         this.initialize(gameWidth, gameHeight);
     }
@@ -356,6 +366,17 @@ class AlienGrid {
                 alien.update(dt); // Make sure alien animations update
             }
         }
+        
+        // Update special attack timer
+        this.specialAttackTimer += dt;
+        if (this.specialAttackTimer >= this.specialAttackInterval) {
+            this.specialAttackTimer = 0;
+            
+            // Chance to perform special attack
+            if (Math.random() < this.specialAttackChance && window.game && window.game.protagonist) {
+                this.performSpecialAttack();
+            }
+        }
     }
     
     checkBarrierCollisions() {
@@ -432,22 +453,96 @@ class AlienGrid {
     }
 
     adjustSpeed() {
-        const aliveCount = this.getAliveAliens().length;
-        const totalCount = this.rows * this.cols;
+        // Get the number of remaining aliens
+        const aliveCount = this.aliens.filter(alien => alien.alive).length;
+        const totalAliens = this.rows * this.cols;
+        const percentRemaining = aliveCount / totalAliens;
         
-        // More aggressive speed increase
-        const percentRemaining = aliveCount / totalCount;
+        // Increase speed as aliens are destroyed
+        this.moveInterval = Math.max(0.2, 1.0 * percentRemaining);
         
-        // Adjust move interval to make aliens faster as they're destroyed
-        // From 1 second down to 0.15 seconds between moves
-        this.moveInterval = Math.max(0.15, 1 - (1 - percentRemaining) * 0.85);
+        // Also increase firing rate
+        this.shootProbability = Math.min(0.05, 0.02 + (1 - percentRemaining) * 0.03);
         
-        // Also increase step size slightly for last few aliens
-        this.horizontalStep = 10 + (1 - percentRemaining) * 5;
+        console.log(`Aliens remaining: ${aliveCount}, Speed: ${1/this.moveInterval}, Fire rate: ${this.shootProbability}`);
     }
     
     setGroundLineY(y) {
         this.groundLineY = y;
+    }
+
+    shootRandomAlien() {
+        // Get all alive aliens
+        const aliveAliens = this.aliens.filter(alien => alien.alive);
+        
+        if (aliveAliens.length === 0) return null;
+        
+        // As the game progresses, increase targeting accuracy
+        const level = window.game ? window.game.level : 1;
+        const targetingProbability = 0.3 + (level - 1) * 0.15; // 30% at level 1, 45% at level 2, etc.
+        
+        let shootingAlien;
+        
+        if (Math.random() < targetingProbability && window.game && window.game.protagonist) {
+            // Target the protagonist more directly
+            // Find the aliens in the columns closest to the protagonist
+            const protagonistX = window.game.protagonist.x + window.game.protagonist.width / 2;
+            
+            // Sort aliens by horizontal distance to protagonist
+            const sortedByProximity = [...aliveAliens].sort((a, b) => {
+                const distA = Math.abs((a.x + a.width/2) - protagonistX);
+                const distB = Math.abs((b.x + b.width/2) - protagonistX);
+                return distA - distB;
+            });
+            
+            // Take one of the closest aliens
+            const closestCount = Math.max(1, Math.floor(sortedByProximity.length * 0.2)); // Take top 20%
+            shootingAlien = sortedByProximity[Math.floor(Math.random() * closestCount)];
+        } else {
+            // Random shooting as before
+            const bottomAliens = this.getBottomRowAliens();
+            shootingAlien = bottomAliens[Math.floor(Math.random() * bottomAliens.length)];
+        }
+        
+        return shootingAlien.shoot();
+    }
+
+    // Helper method to get bottom-row aliens
+    getBottomRowAliens() {
+        // Create a map to track the bottom-most alien in each column
+        const bottomAliens = new Map();
+        
+        for (const alien of this.aliens) {
+            if (!alien.alive) continue;
+            
+            const col = alien.colIndex;
+            
+            if (!bottomAliens.has(col) || 
+                alien.y > bottomAliens.get(col).y) {
+                bottomAliens.set(col, alien);
+            }
+        }
+        
+        return Array.from(bottomAliens.values());
+    }
+
+    performSpecialAttack() {
+        if (!window.game) return;
+        
+        // Warning flash
+        window.game.addScreenFlash('rgba(255, 0, 0, 0.3)', 0.3, 0.5);
+        
+        // Schedule a volley of shots
+        const alienCount = Math.min(3, this.aliens.filter(alien => alien.alive).length);
+        
+        for (let i = 0; i < alienCount; i++) {
+            setTimeout(() => {
+                const bullet = this.shootRandomAlien();
+                if (bullet && window.game) {
+                    window.game.bullets.push(bullet);
+                }
+            }, i * 200); // Staggered firing
+        }
     }
 }
 
@@ -481,6 +576,11 @@ class Protagonist extends Entity {
 
         // Movement target for random repositioning
         this.targetX = null;
+
+        // Add acceleration and max speed
+        this.maxSpeed = 200; // Maximum pixels per second
+        this.acceleration = 400; // Acceleration rate
+        this.velocity = 0;
     }
     
     updatePositionFromGround(groundLineY) {
@@ -542,20 +642,33 @@ class Protagonist extends Entity {
                 }
             }
             
-            // Move in current direction
-            this.x += this.direction * this.speed * dt;
+            // Add acceleration and max speed
+            const maxSpeed = 200; // Maximum pixels per second
+            const acceleration = 400; // Acceleration rate
+            let currentSpeed = 0;
+            
+            if (this.direction !== 0) {
+                // Accelerate in the direction of movement
+                this.velocity += this.direction * acceleration * dt;
+                // Clamp to max speed
+                this.velocity = Math.max(-maxSpeed, Math.min(maxSpeed, this.velocity));
+            } else {
+                // Decelerate when no input
+                if (Math.abs(this.velocity) < acceleration * dt) {
+                    this.velocity = 0;
+                } else if (this.velocity > 0) {
+                    this.velocity -= acceleration * dt;
+                } else if (this.velocity < 0) {
+                    this.velocity += acceleration * dt;
+                }
+            }
+            
+            // Move based on velocity
+            this.x += this.velocity * dt;
         }
         
-        // Screen boundary checks
-        if (this.x < 0) {
-            this.x = 0;
-            this.direction = 1;
-            this.targetX = null;
-        } else if (this.x + this.width > this.gameWidth) {
-            this.x = this.gameWidth - this.width;
-            this.direction = -1;
-            this.targetX = null;
-        }
+        // Clamp position to screen boundaries
+        this.x = Math.max(0, Math.min(this.gameWidth - this.width, this.x));
     }
     
     checkForIncomingBullets() {
@@ -661,27 +774,19 @@ class Bullet extends Entity {
 }
 
 class AlienBullet extends Bullet {
-    constructor(x, y) {
-        // Much wider bullet for better hit detection (8px wide instead of 4px)
-        // Slower speed (250 instead of 300) to give less time to dodge
-        super(x, y, 8, 20, 250); 
+    constructor(x, y, type = 'normal') {
+        const bulletSpeed = type === 'fast' ? 350 : 200;
+        super(x, y, 4, 10, bulletSpeed);
+        this.type = type;
     }
     
     draw(ctx) {
-        // Draw the main bullet - still visually 4px wide but centered in the wider hitbox
-        const visualOffset = (this.width - 4) / 2;
-        ctx.drawImage(ASSETS.getImage('alienBullet'), this.x + visualOffset, this.y, 4, 10);
-        
-        // Draw a trailing effect behind the bullet
-        ctx.save();
-        ctx.globalAlpha = 0.7;
-        ctx.drawImage(ASSETS.getImage('alienBullet'), this.x + visualOffset, this.y - 10, 4, 10);
-        ctx.restore();
-        
-        // Debug: Draw hitbox if debug mode is on
-        if (window.DEBUG_HITBOXES) {
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-            ctx.strokeRect(this.x, this.y, this.width, this.height);
+        if (this.type === 'fast') {
+            // Draw faster bullets with a different appearance
+            ctx.fillStyle = '#ff00ff'; // Purple/pink for fast bullets
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+        } else {
+            ctx.drawImage(ASSETS.getImage('alienBullet'), this.x, this.y, this.width, this.height);
         }
     }
     
