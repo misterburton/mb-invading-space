@@ -39,9 +39,17 @@
     <meta name="apple-mobile-web-app-title" content="Invading Space">
     <link rel="apple-touch-icon" href="https://misterburton.com/works/invading-space/img/invading-space-logo.gif">
     
-    <!-- Favicon -->
-    <link rel="icon" type="image/gif" href="img/invading-space-logo.gif">
-    <link rel="shortcut icon" href="img/invading-space-logo.gif">
+    <!-- Light mode favicon -->
+    <link rel="icon" type="image/png" href="favicon-light.png" media="(prefers-color-scheme: light)">
+    <link rel="shortcut icon" href="favicon-light.png" media="(prefers-color-scheme: light)">
+
+    <!-- Dark mode favicon -->
+    <link rel="icon" type="image/png" href="favicon-dark.png" media="(prefers-color-scheme: dark)">
+    <link rel="shortcut icon" href="favicon-dark.png" media="(prefers-color-scheme: dark)">
+
+    <!-- Fallback favicon (for browsers that don't support prefers-color-scheme) -->
+    <link rel="icon" type="image/png" href="favicon.png">
+    <link rel="shortcut icon" href="favicon.png">
     
     <!-- CSS with cache busting -->
     <link rel="stylesheet" href="styles.css?v=<?php echo time(); ?>">

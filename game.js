@@ -53,8 +53,12 @@ class Game {
         // Player mechanics
         this.lives = 3; // Player starts with 3 lives
         this.player2Score = 0; // Separate score for player controlling aliens
-        this.player2Active = false; // Track whether player is controlling aliens
-        this.currentPlayer = 1; // 1 = cannon player, 2 = alien player
+        this.player2Active = true; // Player is always controlling aliens for tapping
+        this.currentPlayer = 2; // 2 = alien player by default
+        
+        // Add game over timer
+        this.gameOverDelay = 3; // 3 seconds delay before allowing restart
+        this.gameOverTimer = 0; // Time elapsed since game over
     }
     
     resizeCanvas() {
@@ -115,7 +119,10 @@ class Game {
     }
     
     update(dt) {
-        if (this.gameOver) return;
+        if (this.gameOver) {
+            this.gameOverTimer += dt;
+            return;
+        }
         
         // Update visual effects
         this.updateVisualEffects(dt);
@@ -138,6 +145,9 @@ class Game {
             // Collision is already handled in the checkAlienCollision method
             // through the call to this.protagonistHit()
         }
+        
+        // Check if all aliens have been destroyed
+        this.checkForVictory();
         
         // UPDATE ALL BULLETS & COLLISIONS
         this.updateBullets(dt);
@@ -280,7 +290,8 @@ class Game {
     drawLives() {
         const lives = this.lives;
         const spacing = 25;
-        const size = 20;
+        const heightSize = 16;  // Height of the cannon icon
+        const widthSize = 32;   // Width of the cannon icon - wider to match actual cannon
         const startX = 10;
         const y = this.canvas.height - 30;
         
@@ -289,17 +300,23 @@ class Game {
         this.ctx.textAlign = 'left';
         this.ctx.fillText(`${lives}`, startX, y);
         
-        // Draw protagonist icons
+        // Draw protagonist icons with correct aspect ratio
         for (let i = 0; i < lives; i++) {
             const x = startX + 40 + i * spacing;
-            this.ctx.drawImage(ASSETS.getImage('protagonist'), x, y - size, size, size);
+            this.ctx.drawImage(ASSETS.getImage('protagonist'), 
+                              x, y - heightSize, 
+                              widthSize, heightSize); // Width is now twice the height
         }
     }
     
     checkAlienTap(x, y) {
-        // If game is over, handle restart
+        // If game is over, handle restart after delay
         if (this.gameOver) {
-            this.restart();
+            if (this.gameOverTimer >= this.gameOverDelay) {
+                // Reset the game over timer when restarting
+                this.gameOverTimer = 0;
+                this.restart();
+            }
             return true;
         }
         
@@ -390,6 +407,12 @@ class Game {
         this.level = 1;
         this.lives = 3; // Reset lives
         
+        // Reset game over timer
+        this.gameOverTimer = 0;
+        
+        // Don't reset the high score!
+        // this.hiScore remains unchanged
+        
         // Clear game objects
         this.bullets = [];
         this.explosions = [];
@@ -409,7 +432,7 @@ class Game {
         this.screenShake = { magnitude: 0, duration: 0, timeLeft: 0 };
         this.screenFlash = { color: null, opacity: 0, duration: 0, timeLeft: 0 };
         
-        console.log("Game restarted");
+        console.log("Game restarted with high score:", this.hiScore);
     }
     
     createBarriers() {
@@ -501,12 +524,12 @@ class Game {
         this.ctx.textAlign = 'center';
         
         if (this.playerWon) {
-            // Victory message when player defeats aliens
+            // Victory message when player defeats aliens (as the cannon)
             this.ctx.fillText('EARTH SAVED!', centerX, centerY - 40);
             
             // Display final score
             this.ctx.font = `${Math.max(16, Math.floor(16 * this.scaleX))}px 'Press Start 2P', monospace`;
-            this.ctx.fillText(`FINAL SCORE: ${this.score}`, centerX, centerY + 10);
+            this.ctx.fillText(`EARTH SCORE: ${this.score}`, centerX, centerY + 10);
             
             // New high score message if applicable
             if (this.score > this.hiScore) {
@@ -518,23 +541,34 @@ class Game {
                 localStorage.setItem('hiScore', this.hiScore);
             }
         } else {
-            // Game over message when aliens win
+            // Game over message when aliens win (player is controlling the aliens)
             this.ctx.fillText('EARTH INVADED!', centerX, centerY - 40);
             
-            // Display alien score if playing as alien
-            if (this.player2Active) {
-                this.ctx.font = `${Math.max(16, Math.floor(16 * this.scaleX))}px 'Press Start 2P', monospace`;
-                this.ctx.fillText(`ALIEN SCORE: ${this.player2Score}`, centerX, centerY + 10);
-            } else {
-                this.ctx.font = `${Math.max(16, Math.floor(16 * this.scaleX))}px 'Press Start 2P', monospace`;
-                this.ctx.fillText(`YOUR SCORE: ${this.score}`, centerX, centerY + 10);
+            // Always show the ALIEN SCORE when earth is invaded
+            this.ctx.font = `${Math.max(16, Math.floor(16 * this.scaleX))}px 'Press Start 2P', monospace`;
+            this.ctx.fillText(`ALIEN SCORE: ${this.player2Score}`, centerX, centerY + 10);
+            
+            // Also show Earth's score
+            this.ctx.font = `${Math.max(12, Math.floor(12 * this.scaleX))}px 'Press Start 2P', monospace`;
+            this.ctx.fillText(`EARTH SCORE: ${this.score}`, centerX, centerY + 40);
+            
+            // Check if alien score is a new high score
+            if (this.player2Score > this.hiScore) {
+                this.ctx.fillStyle = '#FFFF00'; // Yellow for high score
+                this.ctx.fillText('NEW HIGH SCORE!', centerX, centerY + 70);
+                
+                // Save the high score
+                this.hiScore = this.player2Score;
+                localStorage.setItem('hiScore', this.hiScore);
             }
         }
         
-        // Always show the tap to play again message
-        this.ctx.fillStyle = '#AAAAAA';
-        this.ctx.font = `${Math.max(14, Math.floor(14 * this.scaleX))}px 'Press Start 2P', monospace`;
-        this.ctx.fillText('TAP TO PLAY AGAIN', centerX, centerY + 80);
+        // Only show the "tap to play again" message after the delay
+        if (this.gameOverTimer >= this.gameOverDelay) {
+            this.ctx.fillStyle = '#AAAAAA';
+            this.ctx.font = `${Math.max(14, Math.floor(14 * this.scaleX))}px 'Press Start 2P', monospace`;
+            this.ctx.fillText('TAP TO PLAY AGAIN', centerX, centerY + 100);
+        }
     }
     
     updateBullets(dt) {
@@ -901,10 +935,16 @@ class Game {
     }
     
     checkForVictory() {
-        // Check if all aliens are destroyed
-        const aliensRemaining = this.alienGrid.aliens.some(alien => alien.alive);
+        // Count how many aliens are still alive
+        const aliensAlive = this.alienGrid.aliens.filter(alien => alien.alive).length;
         
-        if (!aliensRemaining && !this.gameOver) {
+        // Log the count for debugging
+        console.log(`Aliens still alive: ${aliensAlive}`);
+        
+        // If no aliens remain and game isn't over yet, player wins
+        if (aliensAlive === 0 && !this.gameOver) {
+            console.log("Victory condition triggered! All aliens defeated.");
+            
             // Player has won
             this.gameOver = true;
             this.playerWon = true;
@@ -1025,18 +1065,35 @@ class Game {
         // Add red flash
         this.addScreenFlash('rgba(255, 0, 0, 0.5)', 0.5, 0.5);
         
+        // Award substantial points to aliens when they hit the cannon
+        this.player2Score += 150; // Increased from 50 to 150
+        
+        // Add score popup for alien points
+        this.scorePopups.push(new ScorePopup(
+            this.protagonist.x + this.protagonist.width/2,
+            this.protagonist.y,
+            150, // Show the points gained
+            '#FF00FF' // Purple for alien scoring
+        ));
+        
         // Reduce lives
         this.lives--;
         
         if (this.lives <= 0) {
             // Game over when all lives are depleted
             this.gameOver = true;
-            this.playerWon = false; // Player lost
+            this.playerWon = false; // Player lost as cannon, won as aliens
             
-            // If player 2 (alien player) is active, they score big points
-            if (this.player2Active) {
-                this.player2Score += 1000; // Big bonus for defeating all lives
-            }
+            // Add bonus for defeating all lives
+            this.player2Score += 500; // Big bonus for defeating all cannon lives
+            
+            // Add a big score popup
+            this.scorePopups.push(new ScorePopup(
+                this.canvas.width / 2,
+                this.canvas.height / 2 - 30,
+                500,
+                '#FF00FF' // Purple for alien scoring
+            ));
         } else {
             // Reset protagonist position without ending the game
             setTimeout(() => {
@@ -1048,8 +1105,12 @@ class Game {
     // Update tap/click handling when game is over 
     handleTap(x, y) {
         if (this.gameOver) {
-            // Reset and restart the game
-            this.restart();
+            // Only allow restart after the delay has passed
+            if (this.gameOverTimer >= this.gameOverDelay) {
+                // Reset the game over timer when restarting
+                this.gameOverTimer = 0;
+                this.restart();
+            }
             return;
         }
         
