@@ -60,6 +60,10 @@ class Game {
         this.currentPlayer = 2; // 2 = alien player by default
         
         this.shaderManager = new ShaderManager(this.canvas);
+        
+        // Add these properties to the Game constructor
+        this.gameOverTime = Date.now();
+        this.gameOverDelay = 3; // 3 second delay before allowing restart
     }
     
     resizeCanvas() {
@@ -138,6 +142,8 @@ class Game {
         if (this.alienGrid.checkGroundCollision(this.groundLineY)) {
             this.gameOver = true;
             this.playerWon = false;
+            this.gameOverTime = Date.now();
+            console.log("Game over time set in update:", this.gameOverTime);
             return;
         }
         
@@ -314,10 +320,19 @@ class Game {
     }
     
     checkAlienTap(x, y) {
-        // If game is over, handle restart
         if (this.gameOver) {
-            this.restart();
-            return true;
+            const timeSinceGameOver = (Date.now() - this.gameOverTime) / 1000;
+            console.log("Time since game over:", timeSinceGameOver, "seconds");
+            console.log("Delay required:", this.gameOverDelay, "seconds");
+            
+            // Only allow restart after delay has passed
+            if (timeSinceGameOver >= this.gameOverDelay) {
+                console.log("Delay passed, restarting game");
+                this.restart();
+                return true;
+            }
+            console.log("Delay not passed, ignoring tap");
+            return true; // Still consume the tap event even if we don't restart
         }
         
         // Find tapped alien
@@ -396,6 +411,10 @@ class Game {
             this.hiScore = this.score;
             localStorage.setItem('hiScore', this.hiScore);
         }
+        
+        // In the endGame method, add this line and make sure it's not being overwritten:
+        this.gameOverTime = Date.now();
+        console.log("Game over time set to:", this.gameOverTime);
     }
     
     restart() {
@@ -563,7 +582,16 @@ class Game {
         // Always show the tap to play again message
         this.ctx.fillStyle = '#AAAAAA';
         this.ctx.font = `${Math.max(14, Math.floor(14 * this.scaleX))}px 'Press Start 2P', monospace`;
-        this.ctx.fillText('TAP TO PLAY AGAIN', centerX, centerY + 100);
+
+        // Only show "TAP TO PLAY AGAIN" after the delay has passed
+        const timeSinceGameOver = (Date.now() - this.gameOverTime) / 1000;
+        if (timeSinceGameOver >= this.gameOverDelay) {
+            this.ctx.fillText('TAP TO PLAY AGAIN', centerX, centerY + 100);
+        } else {
+            // Show countdown instead
+            const remainingTime = Math.ceil(this.gameOverDelay - timeSinceGameOver);
+            this.ctx.fillText(`WAIT ${remainingTime}...`, centerX, centerY + 100);
+        }
     }
     
     updateBullets(dt) {
@@ -943,6 +971,8 @@ class Game {
             // Player has won
             this.gameOver = true;
             this.playerWon = true;
+            this.gameOverTime = Date.now();
+            console.log("Game over time set in checkForVictory:", this.gameOverTime);
             
             // Create victory effects
             this.addScreenFlash('rgba(255, 255, 255, 0.3)', 0.7, 0.3);
@@ -1077,7 +1107,9 @@ class Game {
         if (this.lives <= 0) {
             // Game over when all lives are depleted
             this.gameOver = true;
-            this.playerWon = false; // Player lost as cannon, won as aliens
+            this.playerWon = false;
+            this.gameOverTime = Date.now();
+            console.log("Game over time set in protagonistHit:", this.gameOverTime);
             
             // Add bonus for defeating all lives
             this.player2Score += 500; // Big bonus for defeating all cannon lives
