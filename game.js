@@ -1,3 +1,6 @@
+import * as THREE from 'three';
+import { setupPostProcessing, startRandomGlitches } from './js/shaders/setup/ShaderSetup.js';
+
 window.DEBUG_HITBOXES = false; // Set to true via console to see hitboxes
 
 class Game {
@@ -56,9 +59,7 @@ class Game {
         this.player2Active = true; // Player is always controlling aliens for tapping
         this.currentPlayer = 2; // 2 = alien player by default
         
-        // Add game over timer
-        this.gameOverDelay = 3; // 3 seconds delay before allowing restart
-        this.gameOverTimer = 0; // Time elapsed since game over
+        this.shaderManager = new ShaderManager(this.canvas);
     }
     
     resizeCanvas() {
@@ -114,15 +115,15 @@ class Game {
         this.update(deltaTime);
         this.draw();
         
+        // Update shaders last
+        this.shaderManager.update();
+        
         // Continue the loop
         requestAnimationFrame(this.gameLoop.bind(this));
     }
     
     update(dt) {
-        if (this.gameOver) {
-            this.gameOverTimer += dt;
-            return;
-        }
+        if (this.gameOver) return;
         
         // Update visual effects
         this.updateVisualEffects(dt);
@@ -310,13 +311,9 @@ class Game {
     }
     
     checkAlienTap(x, y) {
-        // If game is over, handle restart after delay
+        // If game is over, handle restart
         if (this.gameOver) {
-            if (this.gameOverTimer >= this.gameOverDelay) {
-                // Reset the game over timer when restarting
-                this.gameOverTimer = 0;
-                this.restart();
-            }
+            this.restart();
             return true;
         }
         
@@ -406,9 +403,6 @@ class Game {
         this.player2Score = 0;
         this.level = 1;
         this.lives = 3; // Reset lives
-        
-        // Reset game over timer
-        this.gameOverTimer = 0;
         
         // Don't reset the high score!
         // this.hiScore remains unchanged
@@ -563,12 +557,10 @@ class Game {
             }
         }
         
-        // Only show the "tap to play again" message after the delay
-        if (this.gameOverTimer >= this.gameOverDelay) {
-            this.ctx.fillStyle = '#AAAAAA';
-            this.ctx.font = `${Math.max(14, Math.floor(14 * this.scaleX))}px 'Press Start 2P', monospace`;
-            this.ctx.fillText('TAP TO PLAY AGAIN', centerX, centerY + 100);
-        }
+        // Always show the tap to play again message
+        this.ctx.fillStyle = '#AAAAAA';
+        this.ctx.font = `${Math.max(14, Math.floor(14 * this.scaleX))}px 'Press Start 2P', monospace`;
+        this.ctx.fillText('TAP TO PLAY AGAIN', centerX, centerY + 100);
     }
     
     updateBullets(dt) {
@@ -1105,12 +1097,8 @@ class Game {
     // Update tap/click handling when game is over 
     handleTap(x, y) {
         if (this.gameOver) {
-            // Only allow restart after the delay has passed
-            if (this.gameOverTimer >= this.gameOverDelay) {
-                // Reset the game over timer when restarting
-                this.gameOverTimer = 0;
-                this.restart();
-            }
+            // Reset and restart the game
+            this.restart();
             return;
         }
         
@@ -1278,3 +1266,79 @@ class ScorePopup {
         ctx.restore();
     }
 } 
+
+class ShaderManager {
+    constructor(targetCanvas) {
+        // Create overlay canvas for shaders
+        this.overlayCanvas = document.createElement('canvas');
+        this.overlayCanvas.style.position = 'absolute';
+        this.overlayCanvas.style.top = '0';
+        this.overlayCanvas.style.left = '0';
+        this.overlayCanvas.style.pointerEvents = 'none'; // Let clicks pass through
+        targetCanvas.parentElement.appendChild(this.overlayCanvas);
+
+        // Setup Three.js renderer
+        this.renderer = new THREE.WebGLRenderer({ 
+            canvas: this.overlayCanvas,
+            alpha: true 
+        });
+
+        // Create simple scene with a plane
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+        
+        // Create texture from game canvas
+        this.gameTexture = new THREE.CanvasTexture(targetCanvas);
+        
+        // Create a plane that fills the view
+        const geometry = new THREE.PlaneGeometry(2, 2);
+        const material = new THREE.MeshBasicMaterial({ 
+            map: this.gameTexture,
+            transparent: true 
+        });
+        const plane = new THREE.Mesh(geometry, material);
+        this.scene.add(plane);
+
+        // Match overlay canvas size to target canvas
+        this.resize(targetCanvas.width, targetCanvas.height);
+        
+        // Setup post-processing
+        const { composer, badTVPass, rgbShiftPass, staticPass } = 
+            setupPostProcessing(this.renderer, this.scene, this.camera);
+        
+        this.composer = composer;
+        this.badTVPass = badTVPass;
+        this.rgbShiftPass = rgbShiftPass;
+        this.staticPass = staticPass;
+        
+        // Start with effects enabled
+        this.setEnabled(true);
+        
+        // Optional: Start random glitch effects
+        startRandomGlitches(badTVPass, staticPass, rgbShiftPass);
+    }
+
+    resize(width, height) {
+        this.overlayCanvas.width = width;
+        this.overlayCanvas.height = height;
+        this.renderer.setSize(width, height);
+        if (this.composer) {
+            this.composer.setSize(width, height);
+        }
+    }
+
+    update() {
+        if (!this.enabled) return;
+        
+        // Update texture from game canvas
+        this.gameTexture.needsUpdate = true;
+        
+        // Render effects
+        this.composer.render();
+    }
+
+    setEnabled(enabled) {
+        this.enabled = enabled;
+        this.overlayCanvas.style.display = enabled ? 'block' : 'none';
+    }
+}

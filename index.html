@@ -53,7 +53,80 @@
     
     <!-- CSS with cache busting -->
     <link rel="stylesheet" href="styles.css?v=<?php echo time(); ?>">
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+
+    <!-- <script async src="js/lib/es-module-shims.min.js"></script> -->
+    <script src="js/lib/gsap.min.js"></script>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./js/lib/three/build/three.module.js",
+          "three/addons/": "./js/lib/three/examples/jsm/"
+        }
+      }
+    </script>
+    
+    <!-- Add shader files -->
+    <script id="vertexShader" type="x-shader/x-vertex">
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    </script>
+    
+    <script id="fragmentShader" type="x-shader/x-fragment">
+      uniform sampler2D tDiffuse;
+      uniform float time;
+      uniform float scanlineIntensity;
+      uniform float scanlineCount;
+      uniform float noiseIntensity;
+      uniform float vignetteIntensity;
+      varying vec2 vUv;
+      
+      float random(vec2 st) {
+        return fract(sin(dot(st.xy, vec2(12.9898, 78.233))) * 43758.5453123);
+      }
+      
+      void main() {
+        // Basic texture lookup
+        vec4 texel = texture2D(tDiffuse, vUv);
+        
+        // Scanlines
+        float scanline = sin(vUv.y * scanlineCount * 3.14159 * 2.0) * 0.5 + 0.5;
+        scanline = pow(scanline, 1.0) * scanlineIntensity;
+        
+        // Noise
+        float noise = random(vUv + vec2(time * 0.01, 0.0)) * noiseIntensity;
+        
+        // Vignette
+        float vignette = 1.0 - length((vUv - 0.5) * 1.8);
+        vignette = pow(vignette, vignetteIntensity);
+        
+        // RGB shift
+        float shift = 0.002;
+        vec4 rTexel = texture2D(tDiffuse, vUv + vec2(shift, 0.0));
+        vec4 gTexel = texture2D(tDiffuse, vUv);
+        vec4 bTexel = texture2D(tDiffuse, vUv - vec2(shift, 0.0));
+        
+        // Combine effects
+        vec4 finalColor = vec4(
+          rTexel.r * (1.0 - scanline) * vignette,
+          gTexel.g * (1.0 - scanline) * vignette,
+          bTexel.b * (1.0 - scanline) * vignette,
+          1.0
+        );
+        
+        // Add noise
+        finalColor.rgb += noise;
+        
+        // Slight color adjustment for retro feel
+        finalColor.rgb = mix(finalColor.rgb, vec3(
+          dot(finalColor.rgb, vec3(0.299, 0.587, 0.114))
+        ), 0.1);
+        
+        gl_FragColor = finalColor;
+      }
+    </script>
 </head>
 <body>
     <div id="game-container">
@@ -69,7 +142,7 @@
     <script src="soundSystem.js?v=<?php echo time(); ?>"></script>
     <script src="entities.js?v=<?php echo time(); ?>"></script>
     <script src="controls.js?v=<?php echo time(); ?>"></script>
-    <script src="game.js?v=<?php echo time(); ?>"></script>
+    <script type="module" src="game.js?v=<?php echo time(); ?>"></script>
     
     <!-- Alternative JavaScript cache busting if not using PHP -->
     <script>
