@@ -89,7 +89,7 @@ class Game {
         this.canvas.width = displayWidth;
         this.canvas.height = displayHeight - verticalMargin;
         
-        console.log(`Canvas sized to: ${this.canvas.width}x${this.canvas.height}`);
+        // console.log(`Canvas sized to: ${this.canvas.width}x${this.canvas.height}`);
     }
     
     initializeUI() {
@@ -239,7 +239,7 @@ class Game {
         
         // Adjust font size based on screen width for narrow devices
         const isNarrowScreen = this.canvas.width < 400;
-        console.log("Screen width:", this.canvas.width, "isNarrow:", isNarrowScreen);
+        // console.log("Screen width:", this.canvas.width, "isNarrow:", isNarrowScreen);
         this.ctx.font = `${isNarrowScreen ? 10 : this.SCORE_FONT_SIZE}px 'Press Start 2P', monospace`;
         
         // Use percentage-based margins for better scaling
@@ -289,24 +289,27 @@ class Game {
     }
     
     drawLives() {
-        const lives = this.lives;
+        // Calculate remaining lives (excluding the active cannon)
+        const remainingLives = this.lives - 1;
         const spacing = 25;
         const heightSize = 16;  // Height of the cannon icon
         const widthSize = 32;   // Width of the cannon icon - wider to match actual cannon
         const startX = 10;
         const y = this.canvas.height - 30;
         
+        // Draw the text showing number of REMAINING lives
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = '16px "Press Start 2P", monospace';
         this.ctx.textAlign = 'left';
-        this.ctx.fillText(`${lives}`, startX, y);
+        this.ctx.fillText(`${remainingLives}`, startX, y);
         
         // Draw protagonist icons with correct aspect ratio
-        for (let i = 0; i < lives; i++) {
+        // Only draw remaining lives icons since the active cannon is already on screen
+        for (let i = 0; i < remainingLives; i++) {
             const x = startX + 40 + i * spacing;
             this.ctx.drawImage(ASSETS.getImage('protagonist'), 
                               x, y - heightSize, 
-                              widthSize, heightSize); // Width is now twice the height
+                              widthSize, heightSize);
         }
     }
     
@@ -344,7 +347,7 @@ class Game {
             // Add small screen shake for feedback
             this.addScreenShake(2, 0.1);
             
-            console.log("Alien fired!");
+            // console.log("Alien fired!");
             return true;
         }
         
@@ -426,7 +429,7 @@ class Game {
         this.screenShake = { magnitude: 0, duration: 0, timeLeft: 0 };
         this.screenFlash = { color: null, opacity: 0, duration: 0, timeLeft: 0 };
         
-        console.log("Game restarted with high score:", this.hiScore);
+        // console.log("Game restarted with high score:", this.hiScore);
     }
     
     createBarriers() {
@@ -773,7 +776,7 @@ class Game {
         this.scaleX = this.canvas.width / 540; // Scale relative to original 540px width
         this.scaleY = this.canvas.height / 720; // Scale relative to original 720px height
         
-        console.log(`Game scaling: ${this.scaleX}x, ${this.scaleY}y`);
+        // console.log(`Game scaling: ${this.scaleX}x, ${this.scaleY}y`);
         
         // Adjust game constants based on screen size
         this.ALIEN_ROWS = 5;
@@ -810,7 +813,7 @@ class Game {
         // UI adjustments
         this.SCORE_FONT_SIZE = Math.max(12, Math.floor(14 * this.scaleY));
         
-        console.log("Game elements scaled to fit viewport");
+        // console.log("Game elements scaled to fit viewport");
     }
     
     initializeVisualEffects() {
@@ -923,7 +926,7 @@ class Game {
         // Add small white flash
         this.addScreenFlash('rgba(255, 255, 255, 0.2)', 0.2, 0.1);
         
-        console.log("Protagonist fired bullet");
+        // console.log("Protagonist fired bullet");
     }
     
     checkForVictory() {
@@ -931,7 +934,7 @@ class Game {
         const aliensAlive = this.alienGrid.aliens.filter(alien => alien.alive).length;
         
         // Log the count for debugging
-        console.log(`Aliens still alive: ${aliensAlive}`);
+        // console.log(`Aliens still alive: ${aliensAlive}`);
         
         // If no aliens remain and game isn't over yet, player wins
         if (aliensAlive === 0 && !this.gameOver) {
@@ -1158,7 +1161,6 @@ class Game {
     }
 }
 
-// Add this to the end of game.js
 window.addEventListener('DOMContentLoaded', () => {
     console.log("DOM loaded, waiting for assets...");
     
