@@ -1,0 +1,14 @@
+{
+  "name": "invading-space",
+  "version": "1.0.0",
+  "description": "A modern remix of the classic alien shooter game",
+  "main": "public/index.html",
+  "scripts": {
+    "build": "node build.js",
+    "clean": "rm -rf public/core public/assets public/lib public/shaders",
+    "start": "cd public && python -m http.server 8000",
+    "prepare-rn": "echo 'This will prepare the project for React Native integration'"
+  },
+  "author": "Burton Rast",
+  "license": "MIT"
+} 

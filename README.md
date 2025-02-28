@@ -1,2 +1,57 @@
-# mb-invading-space
- 
+# Invading Space
+
+A modern remix of the classic alien shooter game that defined a generation of arcade gaming!
+
+## Project Structure
+
+The project is organized to support both web and React Native deployment:
+
+```
+invading-space/
+├── src/                  # Source code
+│   ├── assets/           # Game assets
+│   │   ├── images/       # Image assets
+│   │   └── fonts/        # Font assets
+│   ├── core/             # Core game logic
+│   ├── shaders/          # WebGL shaders
+│   ├── lib/              # Third-party libraries
+│   ├── components/       # Game components
+│   └── styles.css        # CSS styles
+├── public/               # Web build output
+├── build.js              # Build script
+└── package.json          # Project configuration
+```
+
+## Development
+
+To build the project:
+
+```bash
+npm run build
+```
+
+To start a local development server:
+
+```bash
+npm start
+```
+
+To clean the build output:
+
+```bash
+npm run clean
+```
+
+## Gameplay
+
+Invading Space is a modern take on the classic alien shooter game. The player controls a cannon at the bottom of the screen and must shoot down waves of descending aliens before they reach the ground.
+
+- Tap on aliens to make them shoot (player 2 controls)
+- Use arrow keys or swipe to move the cannon
+- Press space or tap the cannon to shoot
+
+## Deployment
+
+The `public` directory contains all files needed for web deployment.
+
+For React Native deployment, the `src` directory contains all the necessary game logic that can be integrated into a React Native project. 
