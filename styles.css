@@ -56,5 +56,5 @@ body {
     font-style: normal;
     font-weight: 400;
     font-display: swap;
-    src: url('../fonts/press-start-2p/press-start-2p.ttf') format('truetype');
+    src: url('./fonts/press-start-2p/PressStart2P-Regular.ttf') format('truetype');
 } 
