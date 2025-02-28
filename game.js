@@ -296,7 +296,9 @@ class Game {
     
     drawLives() {
         // Calculate remaining lives (excluding the active cannon)
-        const remainingLives = this.lives - 1;
+        let remainingLives;
+        if (this.lives > 0) { remainingLives = this.lives - 1 }
+        else { remainingLives = 0 }
         const spacing = 25;
         const heightSize = 16;  // Height of the cannon icon
         const widthSize = 32;   // Width of the cannon icon - wider to match actual cannon
