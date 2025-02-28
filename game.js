@@ -77,21 +77,21 @@ class Game {
         // Disable image smoothing after resetting the context
         this.ctx.imageSmoothingEnabled = false;
         
-        // For React Native compatibility, leave a small margin at top/bottom
-        const verticalMargin = 20; // 10px top and 10px bottom
+        // Remove the vertical margin to fill the entire viewport
+        const verticalMargin = 0; // Changed from 20 to 0
         
         // Set container size
         const container = document.getElementById('game-container');
         container.style.width = '100%';
         container.style.height = '100%';
         
-        // Set canvas display size to fill viewport (minus margins)
+        // Set canvas display size to fill viewport
         this.canvas.style.width = `${displayWidth}px`;
-        this.canvas.style.height = `${displayHeight - verticalMargin}px`;
+        this.canvas.style.height = `${displayHeight}px`; // Removed the margin subtraction
         
         // Set canvas internal size to match display size
         this.canvas.width = displayWidth;
-        this.canvas.height = displayHeight - verticalMargin;
+        this.canvas.height = displayHeight; // Removed the margin subtraction
         
         // console.log(`Canvas sized to: ${this.canvas.width}x${this.canvas.height}`);
     }
