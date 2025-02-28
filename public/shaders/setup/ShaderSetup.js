@@ -46,8 +46,8 @@ export function randomizeEffects(badTVPass, staticPass, rgbShiftPass, gui = null
     try {
         // Apply effects to passes
         if (badTVPass?.uniforms) {
-            badTVPass.uniforms.distortion.value = Math.random() * .5;
-            badTVPass.uniforms.distortion2.value = Math.random() * .5;
+            badTVPass.uniforms.distortion.value = Math.random() * 2.5;
+            badTVPass.uniforms.distortion2.value = Math.random() * 2.5;
             badTVPass.uniforms.speed.value = Math.random() * 0;
             badTVPass.uniforms.rollSpeed.value = Math.random() * 0;
         }
