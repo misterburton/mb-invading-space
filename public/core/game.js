@@ -23,9 +23,14 @@ class Game {
         this.fpsUpdateTimer = 0;
         this.performanceLevel = 'high'; // 'high', 'medium', or 'low'
         
+        // Store bound event handlers for later removal
+        this.boundResizeCanvas = this.resizeCanvas.bind(this);
+        this.boundClickHandler = this.handleClick.bind(this);
+        this.boundTouchHandler = this.handleTouch.bind(this);
+        
         // Resize canvas to fit the screen
         this.resizeCanvas();
-        window.addEventListener('resize', this.resizeCanvas.bind(this));
+        window.addEventListener('resize', this.boundResizeCanvas);
         
         // Initialize game state
         this.alienGrid = new AlienGrid(this.canvas.width, this.canvas.height);
@@ -75,6 +80,60 @@ class Game {
         // Add these properties to the Game constructor
         this.gameOverTime = Date.now();
         this.gameOverDelay = 3; // 3 second delay before allowing restart
+        
+        // Add a property to store timeout IDs
+        this.activeTimeouts = [];
+    }
+    
+    // Handle click events (extracted from setupSoundToggleListener)
+    handleClick(event) {
+        this.checkSoundToggleInteraction(event.clientX, event.clientY);
+    }
+    
+    // Handle touch events (extracted from setupSoundToggleListener)
+    handleTouch(event) {
+        event.preventDefault(); // Prevent default behavior
+        if (event.changedTouches.length > 0) {
+            const touch = event.changedTouches[0];
+            this.checkSoundToggleInteraction(touch.clientX, touch.clientY);
+        }
+    }
+    
+    // Clean up all event listeners and resources
+    cleanup() {
+        console.log("Cleaning up game resources and event listeners");
+        
+        // Remove window event listeners
+        window.removeEventListener('resize', this.boundResizeCanvas);
+        
+        // Remove canvas event listeners
+        this.canvas.removeEventListener('click', this.boundClickHandler);
+        this.canvas.removeEventListener('touchend', this.boundTouchHandler);
+        
+        // Clean up shader manager if it exists
+        if (this.shaderManager) {
+            // Call dispose if available
+            if (typeof this.shaderManager.dispose === 'function') {
+                this.shaderManager.dispose();
+            }
+        }
+        
+        // Clean up sound system
+        if (window.SOUND_SYSTEM && typeof window.SOUND_SYSTEM.dispose === 'function') {
+            // Don't fully dispose, just stop all sounds
+            window.SOUND_SYSTEM.stopAllSounds();
+        }
+        
+        // Clear any running timeouts
+        this.activeTimeouts.forEach(timeoutId => {
+            clearTimeout(timeoutId);
+        });
+        this.activeTimeouts = [];
+        
+        // Clear references to large objects
+        this.explosions = [];
+        this.bullets = [];
+        this.scorePopups = [];
     }
     
     resizeCanvas() {
@@ -431,18 +490,10 @@ class Game {
     
     setupSoundToggleListener() {
         // Add click listener for sound toggle (for desktop)
-        this.canvas.addEventListener('click', (event) => {
-            this.checkSoundToggleInteraction(event.clientX, event.clientY);
-        });
+        this.canvas.addEventListener('click', this.boundClickHandler);
         
         // Add touch listener for sound toggle (for mobile)
-        this.canvas.addEventListener('touchend', (event) => {
-            event.preventDefault(); // Prevent default behavior
-            if (event.changedTouches.length > 0) {
-                const touch = event.changedTouches[0];
-                this.checkSoundToggleInteraction(touch.clientX, touch.clientY);
-            }
-        });
+        this.canvas.addEventListener('touchend', this.boundTouchHandler);
     }
     
     // Helper method to check if interaction is within sound toggle area
@@ -567,6 +618,9 @@ class Game {
     }
     
     restart() {
+        // First, clean up existing resources and event listeners
+        this.cleanup();
+        
         // Check who won the last game
         if (this.playerWon) {
             // Earth won (all aliens destroyed), reset to level 1
@@ -604,6 +658,15 @@ class Game {
         this.currentShake = { x: 0, y: 0 };
         this.screenShake = { magnitude: 0, duration: 0, timeLeft: 0 };
         this.screenFlash = { color: null, opacity: 0, duration: 0, timeLeft: 0 };
+        
+        // Reinitialize shader manager
+        this.shaderManager = new ShaderManager(this.canvas);
+        
+        // Re-setup event listeners
+        this.setupSoundToggleListener();
+        
+        // Reset active timeouts array
+        this.activeTimeouts = [];
     }
     
     createBarriers() {
@@ -1126,7 +1189,7 @@ class Game {
         // Create multiple explosions around the edges of the screen for celebration
         // This avoids placing explosions in the center where they would interfere with text
         for (let i = 0; i < 15; i++) {
-            setTimeout(() => {
+            const timeoutId = setTimeout(() => {
                 // Position explosions around the edges of the play area
                 let x, y;
                 
@@ -1171,7 +1234,16 @@ class Game {
                     flashColors[Math.floor(Math.random() * flashColors.length)],
                     0.3, 0.2
                 );
+                
+                // Remove this timeout ID from the active list once executed
+                const index = this.activeTimeouts.indexOf(timeoutId);
+                if (index !== -1) {
+                    this.activeTimeouts.splice(index, 1);
+                }
             }, i * 200); // Stagger the explosions
+            
+            // Store the timeout ID for potential cleanup
+            this.activeTimeouts.push(timeoutId);
         }
     }
     
@@ -1546,6 +1618,7 @@ class ShaderManager {
         this.overlayCanvas.style.top = '0';
         this.overlayCanvas.style.left = '0';
         this.overlayCanvas.style.pointerEvents = 'none'; // Let clicks pass through
+        this.targetCanvas = targetCanvas;
         targetCanvas.parentElement.appendChild(this.overlayCanvas);
 
         // Setup Three.js renderer
@@ -1567,8 +1640,8 @@ class ShaderManager {
             map: this.gameTexture,
             transparent: true 
         });
-        const plane = new THREE.Mesh(geometry, material);
-        this.scene.add(plane);
+        this.plane = new THREE.Mesh(geometry, material);
+        this.scene.add(this.plane);
 
         // Match overlay canvas size to target canvas
         this.resize(targetCanvas.width, targetCanvas.height);
@@ -1603,6 +1676,60 @@ class ShaderManager {
         
         // Optional: Start random glitches
         startRandomGlitches(badTVPass, staticPass, rgbShiftPass);
+    }
+
+    // Add a proper dispose method to clean up resources
+    dispose() {
+        console.log("Disposing ShaderManager resources");
+        
+        // Remove the overlay canvas from DOM
+        if (this.overlayCanvas && this.overlayCanvas.parentElement) {
+            this.overlayCanvas.parentElement.removeChild(this.overlayCanvas);
+        }
+        
+        // Dispose of Three.js resources
+        if (this.plane && this.plane.geometry) {
+            this.plane.geometry.dispose();
+        }
+        
+        if (this.plane && this.plane.material) {
+            this.plane.material.dispose();
+            if (this.plane.material.map) {
+                this.plane.material.map.dispose();
+            }
+        }
+        
+        // Clear scene
+        if (this.scene) {
+            while (this.scene.children.length > 0) {
+                const object = this.scene.children[0];
+                this.scene.remove(object);
+            }
+        }
+        
+        // Dispose of renderer
+        if (this.renderer) {
+            this.renderer.dispose();
+            this.renderer.forceContextLoss();
+            this.renderer.context = null;
+            this.renderer.domElement = null;
+        }
+        
+        // Dispose of composer and passes
+        if (this.composer) {
+            this.composer = null;
+        }
+        
+        // Clear references
+        this.badTVPass = null;
+        this.rgbShiftPass = null;
+        this.staticPass = null;
+        this.scene = null;
+        this.camera = null;
+        this.gameTexture = null;
+        this.plane = null;
+        this.overlayCanvas = null;
+        this.targetCanvas = null;
     }
 
     resize(width, height) {

@@ -237,6 +237,34 @@ class SoundSystem {
             this.stopSound(name);
         }
     }
+    
+    // Add a proper dispose method to clean up audio resources
+    dispose() {
+        console.log("Disposing SoundSystem resources");
+        
+        // Stop all active sounds
+        this.stopAllSounds();
+        
+        // Close audio context if it exists and is not already closed
+        if (this.audioCtx && this.audioCtx.state !== 'closed') {
+            try {
+                // In some browsers, close() might not be available
+                if (typeof this.audioCtx.close === 'function') {
+                    this.audioCtx.close();
+                    console.log("Audio context closed");
+                }
+            } catch (e) {
+                console.error("Error closing audio context:", e);
+            }
+        }
+        
+        // Clear references
+        this.activeSounds = {};
+        this.masterGain = null;
+        
+        // Mark as uninitialized so it can be reinitialized if needed
+        this.initialized = false;
+    }
 }
 
 // Create global sound system instance
