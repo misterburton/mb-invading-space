@@ -8,9 +8,12 @@
     "clean": "rm -rf public/core public/assets public/lib public/shaders",
     "start": "live-server public --port=8000",
     "watch": "node watch.js",
-    "dev": "npm run watch & npm run start",
+    "dev": "npm run build && (npm run watch & npm run start)",
     "prepare-rn": "echo 'This will prepare the project for React Native integration'"
   },
   "author": "Burton Rast",
-  "license": "MIT"
-} 
+  "license": "MIT",
+  "devDependencies": {
+    "live-server": "^1.2.2"
+  }
+}

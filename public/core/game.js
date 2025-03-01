@@ -357,7 +357,7 @@ class Game {
         }
         
         // Draw FPS performance metrics if enabled
-        this.performanceMonitor.drawPerformanceMetrics(this.ctx, this.canvas.width, this.canvas.height);
+        // this.performanceMonitor.drawPerformanceMetrics(this.ctx, this.canvas.width, this.canvas.height);
         
         // End screen shake effect
         this.endScreenShakeAndFlash(this.ctx);
