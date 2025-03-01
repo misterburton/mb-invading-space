@@ -150,7 +150,32 @@ class Game {
     }
     
     update(dt) {
-        if (this.gameOver) return;
+        if (this.gameOver) {
+            // Only update visual effects and explosions when game is over
+            this.updateVisualEffects(dt);
+            
+            // Update explosions but with reduced speed for a dramatic effect
+            for (let i = 0; i < this.explosions.length; i++) {
+                this.explosions[i].update(dt * 0.5);
+                
+                if (!this.explosions[i].active) {
+                    this.explosions.splice(i, 1);
+                    i--;
+                }
+            }
+            
+            // Update score popups
+            for (let i = 0; i < this.scorePopups.length; i++) {
+                this.scorePopups[i].update(dt);
+                
+                if (!this.scorePopups[i].active) {
+                    this.scorePopups.splice(i, 1);
+                    i--;
+                }
+            }
+            
+            return;
+        }
         
         // Update visual effects
         this.updateVisualEffects(dt);
@@ -665,6 +690,11 @@ class Game {
         const centerX = this.canvas.width / 2;
         const centerY = this.canvas.height / 2;
         
+        // Add a full-screen overlay with color based on game outcome
+        const overlayColor = this.playerWon ? 'rgba(0, 100, 0, 0.7)' : 'rgba(100, 0, 0, 0.7)';
+        this.ctx.fillStyle = overlayColor;
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+        
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = `${Math.max(24, Math.floor(24 * this.scaleX))}px 'Press Start 2P', monospace`;
         this.ctx.textAlign = 'center';
@@ -1081,6 +1111,9 @@ class Game {
             // Play victory sound
             SOUND_SYSTEM.playSound('victory');
             
+            // Create victory celebration effects
+            this.createVictoryCelebration();
+            
             // Save high score if applicable
             if (this.score > this.hiScore) {
                 this.hiScore = this.score;
@@ -1090,18 +1123,38 @@ class Game {
     }
     
     createVictoryCelebration() {
-        // Create multiple explosions across the screen for celebration
+        // Create multiple explosions around the edges of the screen for celebration
+        // This avoids placing explosions in the center where they would interfere with text
         for (let i = 0; i < 15; i++) {
             setTimeout(() => {
-                // Random position in the play area
-                const x = Math.random() * this.canvas.width;
-                const y = 100 + Math.random() * (this.canvas.height - 200);
+                // Position explosions around the edges of the play area
+                let x, y;
+                
+                // Determine position based on iteration
+                if (i % 4 === 0) {
+                    // Left edge
+                    x = this.canvas.width * 0.1;
+                    y = this.canvas.height * (0.2 + 0.6 * Math.random());
+                } else if (i % 4 === 1) {
+                    // Right edge
+                    x = this.canvas.width * 0.9;
+                    y = this.canvas.height * (0.2 + 0.6 * Math.random());
+                } else if (i % 4 === 2) {
+                    // Top edge
+                    x = this.canvas.width * (0.2 + 0.6 * Math.random());
+                    y = this.canvas.height * 0.15;
+                } else {
+                    // Bottom edge (above ground line)
+                    x = this.canvas.width * (0.2 + 0.6 * Math.random());
+                    y = this.groundLineY - 30;
+                }
                 
                 // Create colorful explosion
                 this.createExplosion(
                     x, y, 
                     30 + Math.random() * 30,
-                    ['mysteryShip', 'alien', 'normal'][Math.floor(Math.random() * 3)]
+                    ['mysteryShip', 'alien', 'normal'][Math.floor(Math.random() * 3)],
+                    true // Play explosion sound
                 );
                 
                 // Add screen shake
