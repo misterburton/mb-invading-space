@@ -356,23 +356,48 @@ class Game {
     drawScore() {
         this.ctx.fillStyle = '#FFFFFF';
         
-        // Adjust font size based on screen width for narrow devices
-        const isNarrowScreen = this.canvas.width < 400;
-        // console.log("Screen width:", this.canvas.width, "isNarrow:", isNarrowScreen);
-        this.ctx.font = `${isNarrowScreen ? 10 : this.SCORE_FONT_SIZE}px 'Press Start 2P', monospace`;
+        // More granular responsive design based on screen width
+        const screenWidth = this.canvas.width;
+        let fontSize, useAbbreviatedLabels, horizontalSpacing;
         
-        // Use percentage-based margins for better scaling
-        const margin = Math.max(15, Math.floor(this.canvas.width * 0.08));
+        // Define breakpoints for different screen sizes
+        if (screenWidth < 320) {
+            // Extra small screens (very narrow mobile)
+            fontSize = 8;
+            useAbbreviatedLabels = true;
+            horizontalSpacing = 0.05; // 5% margin
+        } else if (screenWidth < 400) {
+            // Small screens (mobile)
+            fontSize = 10;
+            useAbbreviatedLabels = true;
+            horizontalSpacing = 0.06; // 6% margin
+        } else if (screenWidth < 600) {
+            // Medium screens
+            fontSize = Math.min(12, this.SCORE_FONT_SIZE);
+            useAbbreviatedLabels = false;
+            horizontalSpacing = 0.07; // 7% margin
+        } else {
+            // Large screens
+            fontSize = this.SCORE_FONT_SIZE;
+            useAbbreviatedLabels = false;
+            horizontalSpacing = 0.08; // 8% margin
+        }
         
-        // Improved spacing calculation
+        // Set font with calculated size
+        this.ctx.font = `${fontSize}px 'Press Start 2P', monospace`;
+        
+        // Calculate margins based on screen width
+        const margin = Math.max(10, Math.floor(screenWidth * horizontalSpacing));
+        
+        // Calculate positions
         const leftPos = margin;
-        const centerPos = this.canvas.width / 2;
-        const rightPos = this.canvas.width - margin;
+        const centerPos = screenWidth / 2;
+        const rightPos = screenWidth - margin;
         
-        // Use abbreviated labels on narrow screens
-        const score1Label = isNarrowScreen ? "S<1>" : "SCORE<1>";
-        const hiScoreLabel = isNarrowScreen ? "HI" : "HI-SCORE";
-        const score2Label = isNarrowScreen ? "S<2>" : "SCORE<2>";
+        // Use abbreviated labels on narrow screens if needed
+        const score1Label = useAbbreviatedLabels ? "S<1>" : "SCORE<1>";
+        const hiScoreLabel = useAbbreviatedLabels ? "HI" : "HI-SCORE";
+        const score2Label = useAbbreviatedLabels ? "S<2>" : "SCORE<2>";
         
         // Draw text with proper alignment
         this.ctx.textAlign = 'left';
