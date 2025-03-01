@@ -515,16 +515,21 @@ class Game {
     }
     
     restart() {
+        // Check who won the last game
+        if (this.playerWon) {
+            // Earth won (all aliens destroyed), reset to level 1
+            this.level = 1;
+        } else {
+            // Aliens won (all cannons destroyed), increment level
+            this.level++;
+        }
+        
         // Reset game state
         this.gameOver = false;
         this.playerWon = false;
         this.score = 0;
         this.player2Score = 0;
-        this.level = 1;
         this.lives = 3; // Reset lives
-        
-        // Don't reset the high score!
-        // this.hiScore remains unchanged
         
         // Clear game objects
         this.bullets = [];
@@ -537,6 +542,9 @@ class Game {
         this.protagonist = new Protagonist(this.canvas.width, this.canvas.height);
         this.barriers = this.createBarriers();
         
+        // Apply difficulty based on current level
+        this.increaseDifficulty();
+        
         // Reset timers
         this.mysteryShipTimer = 0;
         
@@ -544,8 +552,6 @@ class Game {
         this.currentShake = { x: 0, y: 0 };
         this.screenShake = { magnitude: 0, duration: 0, timeLeft: 0 };
         this.screenFlash = { color: null, opacity: 0, duration: 0, timeLeft: 0 };
-        
-        // console.log("Game restarted with high score:", this.hiScore);
     }
     
     createBarriers() {
