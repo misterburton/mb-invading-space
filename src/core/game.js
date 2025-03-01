@@ -32,6 +32,9 @@ class Game {
         // Initialize UI
         this.initializeUI();
         
+        // Setup sound toggle listener
+        this.setupSoundToggleListener();
+        
         // Make game globally accessible for AI targeting
         window.game = this;
         
@@ -221,6 +224,9 @@ class Game {
         // Draw lives at the bottom left
         this.drawLives();
         
+        // Draw sound toggle
+        this.drawSoundToggle();
+        
         // Draw mystery ship if active
         if (this.mysteryShip && this.mysteryShip.active) {
             this.mysteryShip.draw(this.ctx);
@@ -318,6 +324,95 @@ class Game {
             this.ctx.drawImage(ASSETS.getImage('protagonist'), 
                               x, y - heightSize, 
                               widthSize, heightSize);
+        }
+    }
+    
+    drawSoundToggle() {
+        // Position in bottom right corner with padding
+        const padding = 15;
+        const size = 24; // Slightly larger for better visibility
+        const x = this.canvas.width - size - padding;
+        const y = this.canvas.height - 36; // Move UP to align with the '2' in bottom left
+        
+        // Draw the speaker icon (black and white pixelated style)
+        this.ctx.fillStyle = '#FFFFFF';
+        
+        // Speaker base (left rectangle)
+        this.ctx.fillRect(
+            x + size * 0.2, 
+            y + size * 0.35 - size/2, 
+            size * 0.2, 
+            size * 0.3
+        );
+        
+        // Speaker cone (triangle)
+        this.ctx.beginPath();
+        this.ctx.moveTo(x + size * 0.4, y + size * 0.35 - size/2);
+        this.ctx.lineTo(x + size * 0.4, y + size * 0.65 - size/2);
+        this.ctx.lineTo(x + size * 0.7, y + size * 0.8 - size/2);
+        this.ctx.lineTo(x + size * 0.7, y + size * 0.2 - size/2);
+        this.ctx.closePath();
+        this.ctx.fill();
+        
+        // Sound waves (only when not muted)
+        if (!SOUND_SYSTEM.muted) {
+            // First sound wave (closest to speaker)
+            this.ctx.beginPath();
+            this.ctx.moveTo(x + size * 0.75, y + size * 0.4 - size/2);
+            this.ctx.lineTo(x + size * 0.85, y + size * 0.3 - size/2);
+            this.ctx.lineTo(x + size * 0.85, y + size * 0.7 - size/2);
+            this.ctx.lineTo(x + size * 0.75, y + size * 0.6 - size/2);
+            this.ctx.fill();
+            
+            // Second sound wave (further from speaker)
+            this.ctx.beginPath();
+            this.ctx.moveTo(x + size * 0.9, y + size * 0.3 - size/2);
+            this.ctx.lineTo(x + size * 1.0, y + size * 0.2 - size/2);
+            this.ctx.lineTo(x + size * 1.0, y + size * 0.8 - size/2);
+            this.ctx.lineTo(x + size * 0.9, y + size * 0.7 - size/2);
+            this.ctx.fill();
+        }
+    }
+    
+    setupSoundToggleListener() {
+        // Add click listener for sound toggle (for desktop)
+        this.canvas.addEventListener('click', (event) => {
+            this.checkSoundToggleInteraction(event.clientX, event.clientY);
+        });
+        
+        // Add touch listener for sound toggle (for mobile)
+        this.canvas.addEventListener('touchend', (event) => {
+            event.preventDefault(); // Prevent default behavior
+            if (event.changedTouches.length > 0) {
+                const touch = event.changedTouches[0];
+                this.checkSoundToggleInteraction(touch.clientX, touch.clientY);
+            }
+        });
+    }
+    
+    // Helper method to check if interaction is within sound toggle area
+    checkSoundToggleInteraction(clientX, clientY) {
+        const rect = this.canvas.getBoundingClientRect();
+        
+        // Calculate the scale factor between canvas coordinates and CSS coordinates
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
+        
+        // Convert position to canvas coordinates
+        const x = (clientX - rect.left) * scaleX;
+        const y = (clientY - rect.top) * scaleY;
+        
+        // Calculate sound toggle position (must match drawSoundToggle)
+        const padding = 15;
+        const size = 24;
+        const toggleX = this.canvas.width - size - padding;
+        const toggleY = this.canvas.height - 36; // Match the position in drawSoundToggle
+        
+        // Check if interaction is within the sound toggle area
+        if (x >= toggleX && x <= toggleX + size && 
+            y >= toggleY - size/2 && y <= toggleY + size/2) {
+            console.log("Sound toggle tapped/clicked");
+            SOUND_SYSTEM.toggleMute();
         }
     }
     

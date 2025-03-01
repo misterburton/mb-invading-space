@@ -196,6 +196,35 @@ class SoundSystem {
         }
     }
     
+    // Set the muted state of the sound system
+    setMuted(muted) {
+        this.muted = muted;
+        
+        // If we're muting, stop all currently playing sounds
+        if (muted) {
+            this.stopAllSounds();
+        }
+        
+        // If we have an audio context, adjust the master gain
+        if (this.initialized && this.masterGain) {
+            // Smoothly transition volume
+            const now = this.audioCtx.currentTime;
+            this.masterGain.gain.cancelScheduledValues(now);
+            this.masterGain.gain.setValueAtTime(this.masterGain.gain.value, now);
+            this.masterGain.gain.linearRampToValueAtTime(
+                muted ? 0 : 0.3, // 0 if muted, otherwise 30%
+                now + 0.2 // Transition over 0.2 seconds
+            );
+        }
+        
+        console.log(`Sound ${muted ? 'muted' : 'unmuted'}`);
+    }
+    
+    // Toggle between muted and unmuted states
+    toggleMute() {
+        this.setMuted(!this.muted);
+    }
+    
     // Space Invaders-specific sound effects
     playAlienMove(step) {
         const soundName = `alienMove${(step % 4) + 1}`;
