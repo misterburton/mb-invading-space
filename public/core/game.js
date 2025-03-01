@@ -15,6 +15,14 @@ class Game {
         this.score = 0;
         this.hiScore = localStorage.getItem('hiScore') || 0;
         
+        // Performance monitoring
+        this.frameTimeHistory = [];
+        this.frameTimeHistoryMax = 60; // Store the last 60 frame times (about 1 second at 60fps)
+        this.currentFPS = 60; // Default assumption
+        this.fpsUpdateInterval = 0.5; // Update FPS calculation every 0.5 seconds
+        this.fpsUpdateTimer = 0;
+        this.performanceLevel = 'high'; // 'high', 'medium', or 'low'
+        
         // Resize canvas to fit the screen
         this.resizeCanvas();
         window.addEventListener('resize', this.resizeCanvas.bind(this));
@@ -113,6 +121,21 @@ class Game {
         
         // Calculate delta time in seconds
         const deltaTime = (timestamp - this.lastTime) / 1000;
+        
+        // Track frame time for performance monitoring
+        this.frameTimeHistory.push(deltaTime);
+        if (this.frameTimeHistory.length > this.frameTimeHistoryMax) {
+            this.frameTimeHistory.shift(); // Remove oldest entry
+        }
+        
+        // Update FPS calculation periodically
+        this.fpsUpdateTimer += deltaTime;
+        if (this.fpsUpdateTimer >= this.fpsUpdateInterval) {
+            this.updatePerformanceMetrics();
+            this.applyPerformanceSettings();
+            this.fpsUpdateTimer = 0;
+        }
+        
         this.lastTime = timestamp;
         
         // Update and draw game
@@ -238,6 +261,9 @@ class Game {
         for (const popup of this.scorePopups) {
             popup.draw(this.ctx);
         }
+        
+        // Draw FPS performance metrics if enabled
+        // this.drawPerformanceMetrics();
         
         // End screen shake effect
         this.endScreenShakeAndFlash(this.ctx);
@@ -1268,6 +1294,87 @@ class Game {
         
         return this.explosions[this.explosions.length - 1]; // Return the created explosion
     }
+    
+    // Calculate current FPS and determine performance level
+    updatePerformanceMetrics() {
+        if (this.frameTimeHistory.length < 10) return; // Need enough samples
+        
+        // Calculate average frame time (excluding outliers)
+        const sortedTimes = [...this.frameTimeHistory].sort((a, b) => a - b);
+        const trimCount = Math.floor(sortedTimes.length * 0.1); // Trim 10% from each end
+        const trimmedTimes = sortedTimes.slice(trimCount, sortedTimes.length - trimCount);
+        
+        const avgFrameTime = trimmedTimes.reduce((sum, time) => sum + time, 0) / trimmedTimes.length;
+        this.currentFPS = Math.round(1 / avgFrameTime);
+        
+        // Determine performance level
+        if (this.currentFPS >= 45) {
+            this.performanceLevel = 'high';
+        } else if (this.currentFPS >= 30) {
+            this.performanceLevel = 'medium';
+        } else {
+            this.performanceLevel = 'low';
+        }
+        
+        // Log performance metrics (can be removed in production)
+        console.log(`Current FPS: ${this.currentFPS}, Performance Level: ${this.performanceLevel}`);
+    }
+    
+    // Apply performance-based settings
+    applyPerformanceSettings() {
+        if (!this.shaderManager) return;
+        
+        switch (this.performanceLevel) {
+            case 'high':
+                // Full effects
+                this.shaderManager.setEnabled(true);
+                this.shaderManager.setQualityLevel('high');
+                break;
+                
+            case 'medium':
+                // Reduced effects
+                this.shaderManager.setEnabled(true);
+                this.shaderManager.setQualityLevel('medium');
+                break;
+                
+            case 'low':
+                // Disable effects
+                this.shaderManager.setEnabled(false);
+                break;
+        }
+    }
+    
+    // Draw FPS and performance level in the corner
+    drawPerformanceMetrics() {
+        // Only show in debug mode or during development
+        const showPerformanceMetrics = true; // Set to false in production
+        
+        if (!showPerformanceMetrics) return;
+        
+        this.ctx.save();
+        
+        // Position in bottom right corner
+        const x = this.canvas.width - 10;
+        const y = this.canvas.height - 50; // Above sound toggle
+        
+        // Set text properties
+        this.ctx.font = '10px monospace';
+        this.ctx.textAlign = 'right';
+        this.ctx.fillStyle = this.performanceLevel === 'high' ? '#00FF00' : 
+                             this.performanceLevel === 'medium' ? '#FFFF00' : '#FF0000';
+        
+        // Draw FPS and performance level
+        this.ctx.fillText(`FPS: ${this.currentFPS}`, x, y);
+        this.ctx.fillText(`Quality: ${this.performanceLevel}`, x, y + 12);
+        
+        // Draw shader status
+        if (this.shaderManager) {
+            const shaderStatus = this.shaderManager.enabled ? 'ON' : 'OFF';
+            this.ctx.fillText(`Shaders: ${shaderStatus}`, x, y + 24);
+        }
+        
+        this.ctx.restore();
+    }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -1422,10 +1529,26 @@ class ShaderManager {
         this.rgbShiftPass = rgbShiftPass;
         this.staticPass = staticPass;
         
+        // Quality settings
+        this.qualityLevel = 'high';
+        this.qualitySettings = {
+            high: {
+                badTV: { distortion: 2.5, distortion2: 1.0, speed: 0.3, rollSpeed: 0.1 },
+                rgbShift: { amount: 0.005, angle: 0.0 },
+                static: { amount: 0.05, size: 4.0 }
+            },
+            medium: {
+                badTV: { distortion: 1.5, distortion2: 0.6, speed: 0.2, rollSpeed: 0.05 },
+                rgbShift: { amount: 0.003, angle: 0.0 },
+                static: { amount: 0.03, size: 3.0 }
+            }
+        };
+        
         // Start with effects enabled
         this.setEnabled(true);
+        this.setQualityLevel('high');
         
-        // Optional: Start random glitch effects
+        // Optional: Start random glitches
         startRandomGlitches(badTVPass, staticPass, rgbShiftPass);
     }
 
@@ -1451,5 +1574,38 @@ class ShaderManager {
     setEnabled(enabled) {
         this.enabled = enabled;
         this.overlayCanvas.style.display = enabled ? 'block' : 'none';
+    }
+    
+    setQualityLevel(level) {
+        if (level === this.qualityLevel || !this.qualitySettings[level]) return;
+        
+        this.qualityLevel = level;
+        const settings = this.qualitySettings[level];
+        
+        // Apply settings to shader passes
+        if (this.badTVPass && settings.badTV) {
+            Object.assign(this.badTVPass.uniforms, {
+                distortion: { value: settings.badTV.distortion },
+                distortion2: { value: settings.badTV.distortion2 },
+                speed: { value: settings.badTV.speed },
+                rollSpeed: { value: settings.badTV.rollSpeed }
+            });
+        }
+        
+        if (this.rgbShiftPass && settings.rgbShift) {
+            Object.assign(this.rgbShiftPass.uniforms, {
+                amount: { value: settings.rgbShift.amount },
+                angle: { value: settings.rgbShift.angle }
+            });
+        }
+        
+        if (this.staticPass && settings.static) {
+            Object.assign(this.staticPass.uniforms, {
+                amount: { value: settings.static.amount },
+                size: { value: settings.static.size }
+            });
+        }
+        
+        console.log(`Shader quality set to: ${level}`);
     }
 }
