@@ -4,7 +4,7 @@ class SoundSystem {
         this.audioCtx = null;
         this.initialized = false;
         this.masterGain = null;
-        this.muted = true; // Add mute flag for testing
+        this.muted = true; // Changed from true to false - sounds enabled by default
         
         // Track active sounds
         this.activeSounds = {};

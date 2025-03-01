@@ -327,12 +327,19 @@ class Game {
         }
     }
     
-    drawSoundToggle() {
-        // Position in bottom right corner with padding
+    // Helper method to get sound toggle position and size
+    getSoundTogglePosition() {
         const padding = 15;
         const size = 24; // Slightly larger for better visibility
         const x = this.canvas.width - size - padding;
-        const y = this.canvas.height - 36; // Move UP to align with the '2' in bottom left
+        const y = this.canvas.height - 36; // Position aligned with the '2' in bottom left
+        
+        return { x, y, size, padding };
+    }
+    
+    drawSoundToggle() {
+        // Get position from the helper method
+        const { x, y, size } = this.getSoundTogglePosition();
         
         // Draw the speaker icon (black and white pixelated style)
         this.ctx.fillStyle = '#FFFFFF';
@@ -402,11 +409,8 @@ class Game {
         const x = (clientX - rect.left) * scaleX;
         const y = (clientY - rect.top) * scaleY;
         
-        // Calculate sound toggle position (must match drawSoundToggle)
-        const padding = 15;
-        const size = 24;
-        const toggleX = this.canvas.width - size - padding;
-        const toggleY = this.canvas.height - 36; // Match the position in drawSoundToggle
+        // Get sound toggle position from the helper method
+        const { x: toggleX, y: toggleY, size } = this.getSoundTogglePosition();
         
         // Check if interaction is within the sound toggle area
         if (x >= toggleX && x <= toggleX + size && 
@@ -740,21 +744,19 @@ class Game {
                     this.score += this.mysteryShip.points;
                     
                     // Create enhanced explosion
-                    this.explosions.push(new Explosion(
+                    this.createExplosion(
                         this.mysteryShip.x + this.mysteryShip.width / 2,
                         this.mysteryShip.y + this.mysteryShip.height / 2,
                         this.mysteryShip.width * 1.5,
-                        'mysteryShip' // Specify explosion type
-                    ));
+                        'mysteryShip',
+                        true // Play explosion sound
+                    );
                     
                     // Remove the bullet
                     this.bullets.splice(i, 1);
                     
                     // Deactivate mystery ship
                     this.mysteryShip.active = false;
-                    
-                    // Play explosion sound
-                    SOUND_SYSTEM.playSound('explosion');
                 }
                 
                 if (hit) {
@@ -794,10 +796,10 @@ class Game {
         // Check if alien bullet hits protagonist
         if (this.bullets[bulletIndex].intersects(this.protagonist)) {
             // Create explosion
-            this.explosions.push(new Explosion(
+            this.createExplosion(
                 this.bullets[bulletIndex].x,
                 this.bullets[bulletIndex].y
-            ));
+            );
             
             // Remove the bullet
             this.bullets.splice(bulletIndex, 1);
@@ -816,33 +818,6 @@ class Game {
             // Play hit sound
             SOUND_SYSTEM.playSound('hit');
         }
-    }
-    
-    // Handle protagonist bullet collisions
-    checkProtagonistBulletCollisions(bulletIndex) {
-        const bullet = this.bullets[bulletIndex];
-        
-        // Check collisions with aliens
-        for (const alien of this.alienGrid.aliens) {
-            if (alien.alive && alien.checkBulletCollision(bullet)) {
-                // Award points based on alien type
-                this.score += this.getAlienPoints(alien);
-                
-                // Remove the bullet
-                this.bullets.splice(bulletIndex, 1);
-                return true;
-            }
-        }
-        
-        // Check collision with mystery ship
-        if (this.mysteryShip && this.mysteryShip.active) {
-            if (this.checkBulletMysteryShipCollision(bullet)) {
-                this.bullets.splice(bulletIndex, 1);
-                return true;
-            }
-        }
-        
-        return false;
     }
     
     // Update explosions
@@ -880,11 +855,11 @@ class Game {
                             }
                             
                             // Small spark effect for regular bullets
-                            this.explosions.push(new Explosion(
+                            this.createExplosion(
                                 segment.x + segment.width / 2,
                                 segment.y + segment.height / 2,
                                 10
-                            ));
+                            );
                             
                             SOUND_SYSTEM.playSound('hit');
                         }
@@ -1100,11 +1075,11 @@ class Game {
                 const y = 100 + Math.random() * (this.canvas.height - 200);
                 
                 // Create colorful explosion
-                this.explosions.push(new Explosion(
+                this.createExplosion(
                     x, y, 
                     30 + Math.random() * 30,
                     ['mysteryShip', 'alien', 'normal'][Math.floor(Math.random() * 3)]
-                ));
+                );
                 
                 // Add screen shake
                 this.addScreenShake(3, 0.2);
@@ -1181,11 +1156,13 @@ class Game {
         SOUND_SYSTEM.playSound('explosion');
         
         // Create explosion at protagonist position
-        this.explosions.push(new Explosion(
+        this.createExplosion(
             this.protagonist.x + this.protagonist.width/2,
             this.protagonist.y + this.protagonist.height/2,
-            40
-        ));
+            40,
+            'normal',
+            false // Sound is already played above
+        );
         
         // Add major screen shake
         this.addScreenShake(10, 0.5);
@@ -1273,18 +1250,16 @@ class Game {
             this.score += this.mysteryShip.points;
             
             // Create enhanced explosion
-            this.explosions.push(new Explosion(
+            this.createExplosion(
                 this.mysteryShip.x + this.mysteryShip.width / 2,
                 this.mysteryShip.y + this.mysteryShip.height / 2,
                 this.mysteryShip.width * 1.5,
-                'mysteryShip' // Specify explosion type
-            ));
+                'mysteryShip',
+                true // Play explosion sound
+            );
             
             // Deactivate mystery ship
             this.mysteryShip.active = false;
-            
-            // Play explosion sound
-            SOUND_SYSTEM.playSound('explosion');
             
             // Add more intense screen shake
             this.addScreenShake(8, 0.4);
@@ -1293,6 +1268,19 @@ class Game {
         }
         
         return false;
+    }
+    
+    // Helper method to create explosions with consistent parameters
+    createExplosion(x, y, size = 20, type = 'normal', playSound = false) {
+        // Add the explosion to the explosions array
+        this.explosions.push(new Explosion(x, y, size, type));
+        
+        // Optionally play explosion sound
+        if (playSound) {
+            SOUND_SYSTEM.playSound('explosion');
+        }
+        
+        return this.explosions[this.explosions.length - 1]; // Return the created explosion
     }
 }
 

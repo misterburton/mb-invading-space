@@ -221,15 +221,13 @@ class Alien extends Entity {
             
             // Create explosion
             if (window.game) {
-                window.game.explosions.push(new Explosion(
+                window.game.createExplosion(
                     this.x + this.width / 2,
                     this.y + this.height / 2,
-                    this.width,
-                    'alien' // Specify explosion type
-                ));
-                
-                // Play explosion sound
-                SOUND_SYSTEM.playSound('explosion');
+                    40, // Much larger explosion for alien collision
+                    'normal',
+                    true // Play sound
+                );
                 
                 // Make sure we call adjustSpeed to update movement speed
                 window.game.alienGrid.adjustSpeed();
@@ -429,14 +427,13 @@ class AlienGrid {
                         console.log("Alien collided with barrier"); // Debug log
                         
                         // Create LARGER explosion at the collision point
-                        window.game.explosions.push(new Explosion(
+                        window.game.createExplosion(
                             alien.x + alien.width / 2,
                             alien.y + alien.height / 2,
-                            40 // Much larger explosion for alien collision
-                        ));
-                        
-                        // Play explosion sound
-                        SOUND_SYSTEM.playSound('explosion');
+                            40, // Much larger explosion for alien collision
+                            'normal',
+                            true // Play sound
+                        );
                         
                         // Create MASSIVE explosive damage to surrounding segments
                         const explosionRadius = 30; // Much larger explosion radius
@@ -944,11 +941,13 @@ class AlienBullet extends Bullet {
         
         // Create a larger explosion at the impact point
         if (window.game && window.game.explosions) {
-            window.game.explosions.push(new Explosion(
+            window.game.createExplosion(
                 hitSegment.x + hitSegment.width / 2,
                 hitSegment.y + hitSegment.height / 2,
-                20 // Larger explosion for bullet impact
-            ));
+                20, // Larger explosion for bullet impact
+                'normal',
+                true // Play sound
+            );
         }
         
         // Apply damage to segments within the radius - MUCH more aggressive now
