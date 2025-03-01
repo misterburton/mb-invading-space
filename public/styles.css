@@ -20,11 +20,15 @@ body {
     justify-content: center;
     align-items: center;
     overflow: hidden;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
 }
 
 #game-canvas {
     background-color: #000;
-    touch-action: none;
+    touch-action: manipulation;
     display: block;
     max-width: 100%;
     max-height: 100%;
@@ -39,6 +43,10 @@ body {
     left: 0;
     width: 100%;
     padding: 10px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    padding-left: calc(10px + env(safe-area-inset-left, 0px));
+    padding-right: calc(10px + env(safe-area-inset-right, 0px));
 }
 
 #protagonist-health {

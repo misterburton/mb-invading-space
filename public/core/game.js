@@ -1,5 +1,9 @@
 import * as THREE from 'three';
-import { setupPostProcessing, startRandomGlitches } from '../shaders/setup/ShaderSetup.js';
+import { ShaderManager } from '../shaders/ShaderManager.js';
+import { TapFeedback, ScorePopup } from '../components/VisualEffects.js';
+import { Explosion, AlienTapHighlight } from '../components/Explosion.js';
+import { CirclePulseEffect } from '../components/VisualEffects.js';
+import { PerformanceMonitor } from './PerformanceMonitor.js';
 
 window.DEBUG_HITBOXES = false; // Set to true via console to see hitboxes
 
@@ -15,13 +19,8 @@ class Game {
         this.score = 0;
         this.hiScore = localStorage.getItem('hiScore') || 0;
         
-        // Performance monitoring
-        this.frameTimeHistory = [];
-        this.frameTimeHistoryMax = 60; // Store the last 60 frame times (about 1 second at 60fps)
-        this.currentFPS = 60; // Default assumption
-        this.fpsUpdateInterval = 0.5; // Update FPS calculation every 0.5 seconds
-        this.fpsUpdateTimer = 0;
-        this.performanceLevel = 'high'; // 'high', 'medium', or 'low'
+        // Set CSS variables for safe area insets
+        this.updateSafeAreaInsets();
         
         // Store bound event handlers for later removal
         this.boundResizeCanvas = this.resizeCanvas.bind(this);
@@ -77,12 +76,32 @@ class Game {
         
         this.shaderManager = new ShaderManager(this.canvas);
         
+        // Initialize performance monitor
+        this.performanceMonitor = new PerformanceMonitor(this.shaderManager);
+        
         // Add these properties to the Game constructor
         this.gameOverTime = Date.now();
         this.gameOverDelay = 3; // 3 second delay before allowing restart
         
         // Add a property to store timeout IDs
         this.activeTimeouts = [];
+    }
+    
+    // Add method to update safe area insets
+    updateSafeAreaInsets() {
+        // Get safe area insets from environment variables
+        const safeAreaTop = getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-top)') || '0px';
+        const safeAreaRight = getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-right)') || '0px';
+        const safeAreaBottom = getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-bottom)') || '0px';
+        const safeAreaLeft = getComputedStyle(document.documentElement).getPropertyValue('env(safe-area-inset-left)') || '0px';
+        
+        // Set CSS variables
+        document.documentElement.style.setProperty('--safe-area-inset-top', safeAreaTop);
+        document.documentElement.style.setProperty('--safe-area-inset-right', safeAreaRight);
+        document.documentElement.style.setProperty('--safe-area-inset-bottom', safeAreaBottom);
+        document.documentElement.style.setProperty('--safe-area-inset-left', safeAreaLeft);
+        
+        console.log(`Safe area insets: top=${safeAreaTop}, right=${safeAreaRight}, bottom=${safeAreaBottom}, left=${safeAreaLeft}`);
     }
     
     // Handle click events (extracted from setupSoundToggleListener)
@@ -141,6 +160,9 @@ class Game {
         const displayWidth = window.innerWidth;
         const displayHeight = window.innerHeight;
         
+        // Update safe area insets
+        this.updateSafeAreaInsets();
+        
         // Clear any existing transformations
         this.ctx.setTransform(1, 0, 0, 1, 0, 0);
         
@@ -180,22 +202,10 @@ class Game {
         
         // Calculate delta time in seconds
         const deltaTime = (timestamp - this.lastTime) / 1000;
-        
-        // Track frame time for performance monitoring
-        this.frameTimeHistory.push(deltaTime);
-        if (this.frameTimeHistory.length > this.frameTimeHistoryMax) {
-            this.frameTimeHistory.shift(); // Remove oldest entry
-        }
-        
-        // Update FPS calculation periodically
-        this.fpsUpdateTimer += deltaTime;
-        if (this.fpsUpdateTimer >= this.fpsUpdateInterval) {
-            this.updatePerformanceMetrics();
-            this.applyPerformanceSettings();
-            this.fpsUpdateTimer = 0;
-        }
-        
         this.lastTime = timestamp;
+        
+        // Update performance monitor
+        this.performanceMonitor.update(deltaTime);
         
         // Update and draw game
         this.update(deltaTime);
@@ -347,7 +357,7 @@ class Game {
         }
         
         // Draw FPS performance metrics if enabled
-        // this.drawPerformanceMetrics();
+        this.performanceMonitor.drawPerformanceMetrics(this.ctx, this.canvas.width, this.canvas.height);
         
         // End screen shake effect
         this.endScreenShakeAndFlash(this.ctx);
@@ -386,13 +396,20 @@ class Game {
         // Set font with calculated size
         this.ctx.font = `${fontSize}px 'Press Start 2P', monospace`;
         
-        // Calculate margins based on screen width
+        // Calculate margins based on screen width, accounting for safe area insets
+        const safeAreaTop = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-top') || '0');
+        const safeAreaLeft = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-left') || '0');
+        const safeAreaRight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-right') || '0');
+        
         const margin = Math.max(10, Math.floor(screenWidth * horizontalSpacing));
         
-        // Calculate positions
-        const leftPos = margin;
+        // Calculate positions with safe area insets
+        const leftPos = margin + safeAreaLeft;
         const centerPos = screenWidth / 2;
-        const rightPos = screenWidth - margin;
+        const rightPos = screenWidth - margin - safeAreaRight;
+        
+        // Top position with safe area inset
+        const topPos = 20 + safeAreaTop;
         
         // Use abbreviated labels on narrow screens if needed
         const score1Label = useAbbreviatedLabels ? "S<1>" : "SCORE<1>";
@@ -401,28 +418,28 @@ class Game {
         
         // Draw text with proper alignment
         this.ctx.textAlign = 'left';
-        this.ctx.fillText(score1Label, leftPos, 20);
+        this.ctx.fillText(score1Label, leftPos, topPos);
         
         this.ctx.textAlign = 'center';
-        this.ctx.fillText(hiScoreLabel, centerPos, 20);
+        this.ctx.fillText(hiScoreLabel, centerPos, topPos);
         
         this.ctx.textAlign = 'right';
-        this.ctx.fillText(score2Label, rightPos, 20);
+        this.ctx.fillText(score2Label, rightPos, topPos);
         
         // Score values with better vertical spacing
         this.ctx.textAlign = 'left';
-        this.ctx.fillText(this.score.toString().padStart(4, '0'), leftPos, 40);
+        this.ctx.fillText(this.score.toString().padStart(4, '0'), leftPos, topPos + 20);
         
         this.ctx.textAlign = 'center';
-        this.ctx.fillText(this.hiScore.toString().padStart(4, '0'), centerPos, 40);
+        this.ctx.fillText(this.hiScore.toString().padStart(4, '0'), centerPos, topPos + 20);
         
         // Update player 2 score if active
         if (this.player2Active) {
             this.ctx.textAlign = 'right';
-            this.ctx.fillText(this.player2Score.toString().padStart(4, '0'), rightPos, 40);
+            this.ctx.fillText(this.player2Score.toString().padStart(4, '0'), rightPos, topPos + 20);
         } else {
             this.ctx.textAlign = 'right';
-            this.ctx.fillText("0000", rightPos, 40);
+            this.ctx.fillText("0000", rightPos, topPos + 20);
         }
         
         // Draw current level
@@ -440,8 +457,13 @@ class Game {
         const spacing = 25;
         const heightSize = 16;  // Height of the cannon icon
         const widthSize = 32;   // Width of the cannon icon - wider to match actual cannon
-        const startX = 10;
-        const y = this.canvas.height - 30;
+        
+        // Account for safe area insets
+        const safeAreaLeft = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-left') || '0');
+        const safeAreaBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-bottom') || '0');
+        
+        const startX = 10 + safeAreaLeft;
+        const y = this.canvas.height - 30 - safeAreaBottom;
         
         // Draw the text showing number of REMAINING lives
         this.ctx.fillStyle = '#FFFFFF';
@@ -463,8 +485,13 @@ class Game {
     getSoundTogglePosition() {
         const padding = 15;
         const size = 24; // Slightly larger for better visibility
-        const x = this.canvas.width - size - padding;
-        const y = this.canvas.height - 36; // Position aligned with the '2' in bottom left
+        
+        // Account for safe area insets
+        const safeAreaRight = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-right') || '0');
+        const safeAreaBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-bottom') || '0');
+        
+        const x = this.canvas.width - size - padding - safeAreaRight;
+        const y = this.canvas.height - 36 - safeAreaBottom; // Position aligned with the '2' in bottom left
         
         return { x, y, size, padding };
     }
@@ -783,22 +810,29 @@ class Game {
         this.ctx.fillStyle = overlayColor;
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
+        // Account for safe area insets for vertical positioning
+        const safeAreaTop = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-top') || '0');
+        const safeAreaBottom = parseInt(getComputedStyle(document.documentElement).getPropertyValue('--safe-area-inset-bottom') || '0');
+        
+        // Adjust centerY if needed to account for notch/home indicator
+        const adjustedCenterY = centerY + (safeAreaTop - safeAreaBottom) / 2;
+        
         this.ctx.fillStyle = '#FFFFFF';
         this.ctx.font = `${Math.max(24, Math.floor(24 * this.scaleX))}px 'Press Start 2P', monospace`;
         this.ctx.textAlign = 'center';
         
         if (this.playerWon) {
             // Victory message when player defeats aliens (as the cannon)
-            this.ctx.fillText('EARTH SAVED!', centerX, centerY - 40);
+            this.ctx.fillText('EARTH SAVED!', centerX, adjustedCenterY - 40);
             
             // Display final score
             this.ctx.font = `${Math.max(16, Math.floor(16 * this.scaleX))}px 'Press Start 2P', monospace`;
-            this.ctx.fillText(`EARTH SCORE: ${this.score}`, centerX, centerY + 10);
+            this.ctx.fillText(`EARTH SCORE: ${this.score}`, centerX, adjustedCenterY + 10);
             
             // New high score message if applicable
             if (this.score > this.hiScore) {
                 this.ctx.fillStyle = '#FFFF00'; // Yellow for high score
-                this.ctx.fillText('NEW HIGH SCORE!', centerX, centerY + 50);
+                this.ctx.fillText('NEW HIGH SCORE!', centerX, adjustedCenterY + 50);
                 
                 // Save the high score
                 this.hiScore = this.score;
@@ -806,20 +840,20 @@ class Game {
             }
         } else {
             // Game over message when aliens win (player is controlling the aliens)
-            this.ctx.fillText('EARTH INVADED!', centerX, centerY - 40);
+            this.ctx.fillText('EARTH INVADED!', centerX, adjustedCenterY - 40);
             
             // Always show the ALIEN SCORE when earth is invaded
             this.ctx.font = `${Math.max(16, Math.floor(16 * this.scaleX))}px 'Press Start 2P', monospace`;
-            this.ctx.fillText(`ALIEN SCORE: ${this.player2Score}`, centerX, centerY + 10);
+            this.ctx.fillText(`ALIEN SCORE: ${this.player2Score}`, centerX, adjustedCenterY + 10);
             
             // Also show Earth's score
             this.ctx.font = `${Math.max(12, Math.floor(12 * this.scaleX))}px 'Press Start 2P', monospace`;
-            this.ctx.fillText(`EARTH SCORE: ${this.score}`, centerX, centerY + 40);
+            this.ctx.fillText(`EARTH SCORE: ${this.score}`, centerX, adjustedCenterY + 40);
             
             // Check if alien score is a new high score
             if (this.player2Score > this.hiScore) {
                 this.ctx.fillStyle = '#FFFF00'; // Yellow for high score
-                this.ctx.fillText('NEW HIGH SCORE!', centerX, centerY + 70);
+                this.ctx.fillText('NEW HIGH SCORE!', centerX, adjustedCenterY + 70);
                 
                 // Save the high score
                 this.hiScore = this.player2Score;
@@ -834,11 +868,11 @@ class Game {
         // Only show "TAP TO PLAY AGAIN" after the delay has passed
         const timeSinceGameOver = (Date.now() - this.gameOverTime) / 1000;
         if (timeSinceGameOver >= this.gameOverDelay) {
-            this.ctx.fillText('TAP TO PLAY AGAIN', centerX, centerY + 100);
+            this.ctx.fillText('TAP TO PLAY AGAIN', centerX, adjustedCenterY + 100);
         } else {
             // Show countdown instead
             const remainingTime = Math.ceil(this.gameOverDelay - timeSinceGameOver);
-            this.ctx.fillText(`WAIT ${remainingTime}...`, centerX, centerY + 100);
+            this.ctx.fillText(`WAIT ${remainingTime}...`, centerX, adjustedCenterY + 100);
         }
     }
     
@@ -1444,87 +1478,6 @@ class Game {
         
         return this.explosions[this.explosions.length - 1]; // Return the created explosion
     }
-    
-    // Calculate current FPS and determine performance level
-    updatePerformanceMetrics() {
-        if (this.frameTimeHistory.length < 10) return; // Need enough samples
-        
-        // Calculate average frame time (excluding outliers)
-        const sortedTimes = [...this.frameTimeHistory].sort((a, b) => a - b);
-        const trimCount = Math.floor(sortedTimes.length * 0.1); // Trim 10% from each end
-        const trimmedTimes = sortedTimes.slice(trimCount, sortedTimes.length - trimCount);
-        
-        const avgFrameTime = trimmedTimes.reduce((sum, time) => sum + time, 0) / trimmedTimes.length;
-        this.currentFPS = Math.round(1 / avgFrameTime);
-        
-        // Determine performance level
-        if (this.currentFPS >= 45) {
-            this.performanceLevel = 'high';
-        } else if (this.currentFPS >= 30) {
-            this.performanceLevel = 'medium';
-        } else {
-            this.performanceLevel = 'low';
-        }
-        
-        // Log performance metrics (can be removed in production)
-        console.log(`Current FPS: ${this.currentFPS}, Performance Level: ${this.performanceLevel}`);
-    }
-    
-    // Apply performance-based settings
-    applyPerformanceSettings() {
-        if (!this.shaderManager) return;
-        
-        switch (this.performanceLevel) {
-            case 'high':
-                // Full effects
-                this.shaderManager.setEnabled(true);
-                this.shaderManager.setQualityLevel('high');
-                break;
-                
-            case 'medium':
-                // Reduced effects
-                this.shaderManager.setEnabled(true);
-                this.shaderManager.setQualityLevel('medium');
-                break;
-                
-            case 'low':
-                // Disable effects
-                this.shaderManager.setEnabled(false);
-                break;
-        }
-    }
-    
-    // Draw FPS and performance level in the corner
-    drawPerformanceMetrics() {
-        // Only show in debug mode or during development
-        const showPerformanceMetrics = true; // Set to false in production
-        
-        if (!showPerformanceMetrics) return;
-        
-        this.ctx.save();
-        
-        // Position in bottom right corner
-        const x = this.canvas.width - 10;
-        const y = this.canvas.height - 50; // Above sound toggle
-        
-        // Set text properties
-        this.ctx.font = '10px monospace';
-        this.ctx.textAlign = 'right';
-        this.ctx.fillStyle = this.performanceLevel === 'high' ? '#00FF00' : 
-                             this.performanceLevel === 'medium' ? '#FFFF00' : '#FF0000';
-        
-        // Draw FPS and performance level
-        this.ctx.fillText(`FPS: ${this.currentFPS}`, x, y);
-        this.ctx.fillText(`Quality: ${this.performanceLevel}`, x, y + 12);
-        
-        // Draw shader status
-        if (this.shaderManager) {
-            const shaderStatus = this.shaderManager.enabled ? 'ON' : 'OFF';
-            this.ctx.fillText(`Shaders: ${shaderStatus}`, x, y + 24);
-        }
-        
-        this.ctx.restore();
-    }
 }
 
 window.addEventListener('DOMContentLoaded', () => {
@@ -1562,255 +1515,5 @@ function checkAssetsAndStart() {
         game.start();
     } else if (!window.gameStarted) {
         setTimeout(checkAssetsAndStart, 100);
-    }
-}
-
-// Add a simple visual feedback class for taps
-class TapFeedback {
-    constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.radius = 10;
-        this.maxRadius = 20;
-        this.alpha = 1;
-        this.active = true;
-    }
-    
-    update(dt) {
-        this.radius += 30 * dt;
-        this.alpha -= 2 * dt;
-        
-        if (this.alpha <= 0 || this.radius >= this.maxRadius) {
-            this.active = false;
-        }
-    }
-    
-    draw(ctx) {
-        if (!this.active) return;
-        
-        ctx.strokeStyle = `rgba(255, 255, 255, ${this.alpha})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-        ctx.stroke();
-    }
-}
-
-// Add a new class for score popups
-class ScorePopup {
-    constructor(x, y, score, color = '#FFFFFF') {
-        this.x = x;
-        this.y = y;
-        this.score = score;
-        this.color = color;
-        this.alpha = 1;
-        this.life = 1; // seconds
-        this.elapsedTime = 0;
-        this.active = true;
-        this.velocity = -60; // pixels per second, upward movement
-    }
-    
-    update(dt) {
-        this.elapsedTime += dt;
-        this.y += this.velocity * dt;
-        
-        // Fade out over time
-        this.alpha = Math.max(0, 1 - this.elapsedTime / this.life);
-        
-        if (this.elapsedTime >= this.life) {
-            this.active = false;
-        }
-    }
-    
-    draw(ctx) {
-        if (!this.active) return;
-        
-        ctx.save();
-        ctx.globalAlpha = this.alpha;
-        ctx.fillStyle = this.color;
-        ctx.font = '14px "Press Start 2P", monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText(`+${this.score}`, this.x, this.y);
-        ctx.restore();
-    }
-} 
-
-class ShaderManager {
-    constructor(targetCanvas) {
-        // Create overlay canvas for shaders
-        this.overlayCanvas = document.createElement('canvas');
-        this.overlayCanvas.style.position = 'absolute';
-        this.overlayCanvas.style.top = '0';
-        this.overlayCanvas.style.left = '0';
-        this.overlayCanvas.style.pointerEvents = 'none'; // Let clicks pass through
-        this.targetCanvas = targetCanvas;
-        targetCanvas.parentElement.appendChild(this.overlayCanvas);
-
-        // Setup Three.js renderer
-        this.renderer = new THREE.WebGLRenderer({ 
-            canvas: this.overlayCanvas,
-            alpha: true 
-        });
-
-        // Create simple scene with a plane
-        this.scene = new THREE.Scene();
-        this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
-        
-        // Create texture from game canvas
-        this.gameTexture = new THREE.CanvasTexture(targetCanvas);
-        
-        // Create a plane that fills the view
-        const geometry = new THREE.PlaneGeometry(2, 2);
-        const material = new THREE.MeshBasicMaterial({ 
-            map: this.gameTexture,
-            transparent: true 
-        });
-        this.plane = new THREE.Mesh(geometry, material);
-        this.scene.add(this.plane);
-
-        // Match overlay canvas size to target canvas
-        this.resize(targetCanvas.width, targetCanvas.height);
-        
-        // Setup post-processing
-        const { composer, badTVPass, rgbShiftPass, staticPass } = 
-            setupPostProcessing(this.renderer, this.scene, this.camera);
-        
-        this.composer = composer;
-        this.badTVPass = badTVPass;
-        this.rgbShiftPass = rgbShiftPass;
-        this.staticPass = staticPass;
-        
-        // Quality settings
-        this.qualityLevel = 'high';
-        this.qualitySettings = {
-            high: {
-                badTV: { distortion: 2.5, distortion2: 1.0, speed: 0.3, rollSpeed: 0.1 },
-                rgbShift: { amount: 0.005, angle: 0.0 },
-                static: { amount: 0.05, size: 4.0 }
-            },
-            medium: {
-                badTV: { distortion: 1.5, distortion2: 0.6, speed: 0.2, rollSpeed: 0.05 },
-                rgbShift: { amount: 0.003, angle: 0.0 },
-                static: { amount: 0.03, size: 3.0 }
-            }
-        };
-        
-        // Start with effects enabled
-        this.setEnabled(true);
-        this.setQualityLevel('high');
-        
-        // Optional: Start random glitches
-        startRandomGlitches(badTVPass, staticPass, rgbShiftPass);
-    }
-
-    // Add a proper dispose method to clean up resources
-    dispose() {
-        console.log("Disposing ShaderManager resources");
-        
-        // Remove the overlay canvas from DOM
-        if (this.overlayCanvas && this.overlayCanvas.parentElement) {
-            this.overlayCanvas.parentElement.removeChild(this.overlayCanvas);
-        }
-        
-        // Dispose of Three.js resources
-        if (this.plane && this.plane.geometry) {
-            this.plane.geometry.dispose();
-        }
-        
-        if (this.plane && this.plane.material) {
-            this.plane.material.dispose();
-            if (this.plane.material.map) {
-                this.plane.material.map.dispose();
-            }
-        }
-        
-        // Clear scene
-        if (this.scene) {
-            while (this.scene.children.length > 0) {
-                const object = this.scene.children[0];
-                this.scene.remove(object);
-            }
-        }
-        
-        // Dispose of renderer
-        if (this.renderer) {
-            this.renderer.dispose();
-            this.renderer.forceContextLoss();
-            this.renderer.context = null;
-            this.renderer.domElement = null;
-        }
-        
-        // Dispose of composer and passes
-        if (this.composer) {
-            this.composer = null;
-        }
-        
-        // Clear references
-        this.badTVPass = null;
-        this.rgbShiftPass = null;
-        this.staticPass = null;
-        this.scene = null;
-        this.camera = null;
-        this.gameTexture = null;
-        this.plane = null;
-        this.overlayCanvas = null;
-        this.targetCanvas = null;
-    }
-
-    resize(width, height) {
-        this.overlayCanvas.width = width;
-        this.overlayCanvas.height = height;
-        this.renderer.setSize(width, height);
-        if (this.composer) {
-            this.composer.setSize(width, height);
-        }
-    }
-
-    update() {
-        if (!this.enabled) return;
-        
-        // Update texture from game canvas
-        this.gameTexture.needsUpdate = true;
-        
-        // Render effects
-        this.composer.render();
-    }
-
-    setEnabled(enabled) {
-        this.enabled = enabled;
-        this.overlayCanvas.style.display = enabled ? 'block' : 'none';
-    }
-    
-    setQualityLevel(level) {
-        if (level === this.qualityLevel || !this.qualitySettings[level]) return;
-        
-        this.qualityLevel = level;
-        const settings = this.qualitySettings[level];
-        
-        // Apply settings to shader passes
-        if (this.badTVPass && settings.badTV) {
-            Object.assign(this.badTVPass.uniforms, {
-                distortion: { value: settings.badTV.distortion },
-                distortion2: { value: settings.badTV.distortion2 },
-                speed: { value: settings.badTV.speed },
-                rollSpeed: { value: settings.badTV.rollSpeed }
-            });
-        }
-        
-        if (this.rgbShiftPass && settings.rgbShift) {
-            Object.assign(this.rgbShiftPass.uniforms, {
-                amount: { value: settings.rgbShift.amount },
-                angle: { value: settings.rgbShift.angle }
-            });
-        }
-        
-        if (this.staticPass && settings.static) {
-            Object.assign(this.staticPass.uniforms, {
-                amount: { value: settings.static.amount },
-                size: { value: settings.static.size }
-            });
-        }
-        
-        console.log(`Shader quality set to: ${level}`);
     }
 }
