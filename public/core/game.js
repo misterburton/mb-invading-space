@@ -80,9 +80,6 @@ class Game {
         // Disable image smoothing after resetting the context
         this.ctx.imageSmoothingEnabled = false;
         
-        // Remove the vertical margin to fill the entire viewport
-        const verticalMargin = 0; // Changed from 20 to 0
-        
         // Set container size
         const container = document.getElementById('game-container');
         container.style.width = '100%';
@@ -1207,17 +1204,6 @@ class Game {
                 this.protagonist = new Protagonist(this.canvas.width, this.canvas.height);
             }, 1000);
         }
-    }
-    
-    // Update tap/click handling when game is over 
-    handleTap(x, y) {
-        if (this.gameOver) {
-            // Reset and restart the game
-            this.restart();
-            return;
-        }
-        
-        // Rest of tap handling code...
     }
     
     getAlienPoints(alien) {
