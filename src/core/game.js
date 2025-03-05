@@ -131,10 +131,16 @@ class Game {
         
         // Clean up shader manager if it exists
         if (this.shaderManager) {
-            // Call dispose if available
-            if (typeof this.shaderManager.dispose === 'function') {
-                this.shaderManager.dispose();
+            try {
+                // Call dispose if available
+                if (typeof this.shaderManager.dispose === 'function') {
+                    this.shaderManager.dispose();
+                }
+            } catch (error) {
+                console.error("Error cleaning up shader manager:", error);
             }
+            // Set to null to ensure garbage collection
+            this.shaderManager = null;
         }
         
         // Clean up sound system
@@ -204,15 +210,19 @@ class Game {
         const deltaTime = (timestamp - this.lastTime) / 1000;
         this.lastTime = timestamp;
         
-        // Update performance monitor
-        this.performanceMonitor.update(deltaTime);
+        // Update performance monitor if it exists
+        if (this.performanceMonitor) {
+            this.performanceMonitor.update(deltaTime);
+        }
         
         // Update and draw game
         this.update(deltaTime);
         this.draw();
         
         // Update shaders last
-        this.shaderManager.update();
+        if (this.shaderManager) {
+            this.shaderManager.update();
+        }
         
         // Continue the loop
         requestAnimationFrame(this.gameLoop.bind(this));
@@ -383,12 +393,12 @@ class Game {
             horizontalSpacing = 0.06; // 6% margin
         } else if (screenWidth < 600) {
             // Medium screens
-            fontSize = Math.min(12, this.SCORE_FONT_SIZE);
+            fontSize = 12;
             useAbbreviatedLabels = false;
             horizontalSpacing = 0.07; // 7% margin
         } else {
             // Large screens
-            fontSize = this.SCORE_FONT_SIZE;
+            fontSize = 14;
             useAbbreviatedLabels = false;
             horizontalSpacing = 0.08; // 8% margin
         }
@@ -445,7 +455,7 @@ class Game {
         // Draw current level
         this.ctx.textAlign = 'center';
         this.ctx.fillStyle = '#AAAAAA';
-        this.ctx.font = `${Math.max(10, Math.floor(10 * this.scaleX))}px 'Press Start 2P', monospace`;
+        this.ctx.font = `${Math.min(14, Math.max(10, Math.floor(10 * this.scaleX)))}px 'Press Start 2P', monospace`;
         this.ctx.fillText(`LEVEL ${this.level}`, this.canvas.width / 2, this.canvas.height - 10);
     }
     
@@ -664,7 +674,7 @@ class Game {
             localStorage.setItem('hiScore', this.hiScore);
         }
         
-        // In the endGame method, add this line and make sure it's not being overwritten:
+        // Store game over time for restart delay
         this.gameOverTime = Date.now();
         console.log("Game over time set to:", this.gameOverTime);
     }
@@ -698,10 +708,12 @@ class Game {
         // Reset grid and protagonist
         this.alienGrid = new AlienGrid(this.canvas.width, this.canvas.height);
         this.protagonist = new Protagonist(this.canvas.width, this.canvas.height);
+        
+        // Create fresh barriers with NO degradation on restart
         this.barriers = this.createBarriers();
         
-        // Apply difficulty based on current level
-        this.increaseDifficulty();
+        // Increase alien difficulty based on level
+        this.increaseDifficultyWithoutBarrierDegradation();
         
         // Reset timers
         this.mysteryShipTimer = 0;
@@ -711,14 +723,25 @@ class Game {
         this.screenShake = { magnitude: 0, duration: 0, timeLeft: 0 };
         this.screenFlash = { color: null, opacity: 0, duration: 0, timeLeft: 0 };
         
-        // Reinitialize shader manager
-        this.shaderManager = new ShaderManager(this.canvas);
+        // Reinitialize shader manager with safety
+        try {
+            this.shaderManager = new ShaderManager(this.canvas);
+            // Reinitialize performance monitor after shader manager
+            this.performanceMonitor = new PerformanceMonitor(this.shaderManager);
+        } catch (error) {
+            console.error("Error initializing shader manager:", error);
+            // Continue without shaders if there's an error
+        }
         
         // Re-setup event listeners
         this.setupSoundToggleListener();
         
         // Reset active timeouts array
         this.activeTimeouts = [];
+        
+        // Restart the game loop
+        this.running = false; // Reset running state
+        this.start(); // Restart the game loop
     }
     
     createBarriers() {
@@ -1092,7 +1115,7 @@ class Game {
         this.BARRIER_Y = this.PROTAGONIST_Y - this.BARRIER_HEIGHT - Math.floor(20 * this.scaleY);
         
         // UI adjustments
-        this.SCORE_FONT_SIZE = Math.max(12, Math.floor(14 * this.scaleY));
+        this.SCORE_FONT_SIZE = Math.min(18, Math.max(12, Math.floor(14 * this.scaleY)));
         
         // console.log("Game elements scaled to fit viewport");
     }
@@ -1317,7 +1340,7 @@ class Game {
         // Show level message
         this.showLevelMessage();
         
-        // Increase difficulty for the next level
+        // Only apply barrier degradation during natural level progression
         this.increaseDifficulty();
     }
     
@@ -1327,7 +1350,7 @@ class Game {
         const centerY = this.canvas.height / 2;
         
         this.ctx.fillStyle = '#FFFFFF';
-        this.ctx.font = `${Math.max(20, Math.floor(20 * this.scaleX))}px 'Press Start 2P', monospace`;
+        this.ctx.font = `${Math.min(20, Math.max(20, Math.floor(20 * this.scaleX)))}px 'Press Start 2P', monospace`;
         this.ctx.textAlign = 'center';
         this.ctx.fillText(`LEVEL ${this.level}`, centerX, centerY);
         
@@ -1335,6 +1358,18 @@ class Game {
         this.addScreenFlash('rgba(0, 255, 0, 0.3)', 0.3, 0.5);
     }
     
+    increaseDifficultyWithoutBarrierDegradation() {
+        // Reinitialize alien grid with increased difficulty
+        this.alienGrid = new AlienGrid(this.canvas.width, this.canvas.height);
+        
+        // Increase alien speed based on level
+        this.alienGrid.speed = 20 + (this.level - 1) * 5;
+        
+        // Increase firing rate
+        this.alienGrid.shootProbability = Math.min(0.02 + (this.level - 1) * 0.005, 0.05);
+    }
+    
+    // Original method - only called during natural level progression, not restart
     increaseDifficulty() {
         // Reinitialize alien grid with increased difficulty
         this.alienGrid = new AlienGrid(this.canvas.width, this.canvas.height);
@@ -1350,7 +1385,12 @@ class Game {
         if (this.level > 2) {
             // Damage barriers a bit for higher levels
             for (const barrier of this.barriers) {
-                barrier.degradeForLevel(this.level);
+                // Safety check to make sure degradeForLevel exists
+                if (barrier && typeof barrier.degradeForLevel === 'function') {
+                    barrier.degradeForLevel(this.level);
+                } else {
+                    console.warn('degradeForLevel method not found on barrier - skipping barrier degradation');
+                }
             }
         }
     }
