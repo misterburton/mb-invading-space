@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invading Space - Video Player</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        video {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+        }
+        
+        .video-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="video-container">
+        <video controls autoplay playsinline loop muted>
+            <source src="assets/videos/invading-space-720p.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Force video to play automatically when possible
+            const video = document.querySelector('video');
+            
+            // Try to play video automatically
+            const playPromise = video.play();
+            
+            if (playPromise !== undefined) {
+                playPromise.catch(error => {
+                    // Auto-play was prevented, try with muted option
+                    if (error.name === 'NotAllowedError') {
+                        video.muted = true;
+                        video.play().catch(e => {
+                            console.error('Still cannot play video:', e);
+                        });
+                    }
+                });
+            }
+            
+            // Handle messages from parent frames (if embedded)
+            window.addEventListener('message', function(event) {
+                if (event.data === 'play') {
+                    video.play();
+                } else if (event.data === 'pause') {
+                    video.pause();
+                }
+            });
+        });
+    </script>
+</body>
+</html> 
