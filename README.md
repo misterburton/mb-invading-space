@@ -44,11 +44,11 @@ npm run clean
 
 ## Gameplay
 
-Invading Space is a modern take on the classic alien shooter game. The player controls a cannon at the bottom of the screen and must shoot down waves of descending aliens before they reach the ground.
+Invading Space is a modern take on the classic alien shooter game, but with a twist - you play as the aliens! Instead of defending Earth, you control the invading alien forces trying to destroy the automated defense cannon below.
 
-- Tap on aliens to make them shoot (player 2 controls)
-- Use arrow keys or swipe to move the cannon
-- Press space or tap the cannon to shoot
+- Tap on aliens to make them shoot at the cannon
+- The defense cannon moves and shoots automatically
+- Your goal is to destroy the cannon before it destroys all your aliens
 
 ## Deployment
 
