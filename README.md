@@ -2,6 +2,10 @@
 
 A modern remix of the classic alien shooter game that defined a generation of arcade gaming!
 
+## Live Demo
+
+Try the game here: [Invading Space](https://misterburton.com/works/invading-space/)
+
 ## Project Structure
 
 The project is organized to support both web and React Native deployment:
